@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1016">
+  <meta name="description" content="SenseFlight 纯视觉与多模态飞行展示：双眼、双镜头、轨迹与模型活动画面同步回放。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>SenseFlight · 感官飞行观测台</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./model-network.css">
+  <link rel="stylesheet" href="./visual-polish.css">
+  <link rel="stylesheet" href="./demo.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="SenseFlight 观测台首页"><span class="brand-mark" aria-hidden="true"><img src="./favicon.svg" alt=""></span><strong>SenseFlight</strong><span class="brand-subtitle">感官飞行观测台</span></a>
+    <div class="top-status"><span class="live-dot"></span><span>冻结回放</span><span class="model-tag">ConnectomeFlight-M-V</span></div>
+    <button id="info-open" class="quiet-button" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 7v4M8 4.5v.2"></path></svg>来源与说明</button>
+  </header>
+
+  <main class="workspace" aria-label="同步飞行观测台">
+    <aside class="input-column" aria-label="视觉输入与局部响应">
+      <div class="column-heading"><h1><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8Z"></path><circle cx="8" cy="8" r="2"></circle></svg>视觉输入</h1><span>左眼 / 右眼</span></div>
+      <section class="readout-card eye-card" aria-labelledby="eyes-title">
+        <div class="card-head"><span class="card-index">A</span><h2 id="eyes-title">双眼图像</h2><span class="card-tag">32 × 32</span></div>
+        <div class="eye-pair"><figure><canvas id="eye-left" width="32" height="32" aria-label="左眼输入图像"></canvas><figcaption>左眼</figcaption></figure><figure><canvas id="eye-right" width="32" height="32" aria-label="右眼输入图像"></canvas><figcaption>右眼</figcaption></figure></div>
+        <p class="readout-caption">双眼输入画面</p>
+      </section>
+      <section class="readout-card hex-card" aria-labelledby="hex-title">
+        <div class="card-head"><span class="card-index">B</span><h2 id="hex-title">六边形采样</h2><span class="card-tag">721 / 眼</span></div>
+        <div class="hex-pair"><figure><canvas id="hex-left" aria-label="左眼六边形采样"></canvas><figcaption>左 <span id="hex-left-value"></span></figcaption></figure><figure><canvas id="hex-right" aria-label="右眼六边形采样"></canvas><figcaption>右 <span id="hex-right-value"></span></figcaption></figure></div>
+        <div class="scale-line"><span>0</span><i class="visual-scale"></i><span>0.7</span></div>
+      </section>
+      <section class="readout-card t4-card" aria-labelledby="t4-title">
+        <div class="card-head"><span class="card-index">C</span><h2 id="t4-title">T4 / T5 活动</h2></div>
+        <div class="cell-controls" role="group" aria-label="选择 T4/T5 细胞类型"><button type="button" data-cell="0" class="selected" aria-pressed="true">T4a</button><button type="button" data-cell="1" aria-pressed="false">T4b</button><button type="button" data-cell="2" aria-pressed="false">T4c</button><button type="button" data-cell="3" aria-pressed="false">T4d</button><button type="button" data-cell="4" aria-pressed="false">T5a</button><button type="button" data-cell="5" aria-pressed="false">T5b</button><button type="button" data-cell="6" aria-pressed="false">T5c</button><button type="button" data-cell="7" aria-pressed="false">T5d</button></div>
+        <div class="hex-pair"><figure><canvas id="t4-left" aria-label="左眼 T4/T5 六边形活动"></canvas><figcaption>左 <span id="t4-left-value"></span></figcaption></figure><figure><canvas id="t4-right" aria-label="右眼 T4/T5 六边形活动"></canvas><figcaption>右 <span id="t4-right-value"></span></figcaption></figure></div>
+        <div class="scale-line"><span>−0.8</span><i class="activity-scale"></i><span>≥1.2</span></div>
+      </section>
+      <section id="odor-card" class="readout-card odor-card" hidden aria-labelledby="odor-title">
+        <div class="card-head"><span class="card-index">D</span><h2 id="odor-title">触角嗅觉</h2><span class="card-tag">0–1</span></div>
+        <canvas id="odor-display" width="256" height="160" aria-label="当前帧左右触角嗅觉画面"></canvas>
+      </section>
+    </aside>
+
+    <section id="flight-panel" class="flight-panel" aria-label="飞行画面与回放控制">
+      <div class="section-heading"><h2><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2"></rect><circle cx="8" cy="8" r="2.5"></circle></svg>飞行画面</h2><div class="section-meta"><span id="scene-id">读取场景…</span><strong id="frame-label">000 / 000</strong></div></div>
+      <div class="camera-pair" aria-label="同步跟随与固定俯视摄像头">
+      <div class="camera-card" aria-label="跟随 FlyBody 的 MuJoCo 摄像头">
+        <canvas id="camera-image" width="1280" height="720" aria-label="同步飞行画面"></canvas>
+        <div class="camera-overlay camera-overlay-top"><span class="badge">跟随镜头<span id="camera-resolution-badge"></span></span><button id="camera-expand" data-camera-view="follow" class="camera-zoom-button" type="button" aria-label="放大跟随摄像头画面" title="放大跟随摄像头画面" disabled><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4"></path></svg></button></div>
+        <div class="camera-overlay camera-overlay-bottom"><span id="sim-time">T + 0.000 S</span><canvas id="camera-position" width="256" height="32" aria-label="当前飞行高度"></canvas></div>
+      </div>
+      <div class="camera-card" aria-label="固定在场景上方的 MuJoCo 俯视摄像头">
+        <canvas id="topdown-image" width="1280" height="720" aria-label="同步飞行画面"></canvas>
+        <div class="camera-overlay camera-overlay-top"><span class="badge">TOPDOWN · 固定俯视</span><button id="topdown-expand" data-camera-view="topdown" class="camera-zoom-button" type="button" aria-label="放大固定俯视摄像头画面" title="放大固定俯视摄像头画面" disabled><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4"></path></svg></button></div>
+        <div class="camera-overlay camera-overlay-bottom"><span id="topdown-time">T + 0.000 S</span><span>X → · Y ↑</span></div>
+      </div>
+      <div id="loading" class="loading" role="status">正在加载展示画面…</div>
+      </div>
+      <div class="transport" aria-label="所有视图共享的回放控制">
+        <button id="play-button" class="play-button" type="button" aria-label="播放" title="播放 / 暂停（空格）" disabled>▶</button>
+        <button id="step-back" class="step-button" type="button" aria-label="后退一帧" title="后退一帧" disabled><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m10 4-4 4 4 4"></path></svg></button><button id="step-forward" class="step-button" type="button" aria-label="前进一帧" title="前进一帧" disabled><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"></path></svg></button>
+        <input id="timeline" type="range" min="0" max="205" value="0" aria-label="飞行时间轴" disabled>
+        <label class="speed-control"><span>速度</span><select id="speed" aria-label="回放速度"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label>
+      </div>
+      <div id="panel-divider" class="panel-divider" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="flight-panel model-network" aria-label="调整飞行画面与模型活动的高度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" title="拖动调整高度 · 双击恢复 · 上下方向键微调 · Home 恢复"></div>
+    </section>
+
+    <aside class="right-column" aria-label="任务轨迹与动作输出">
+      <section class="trajectory-card" aria-labelledby="trajectory-title">
+        <div class="right-head"><h2 id="trajectory-title"><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="12" r="1.5"></circle><path d="M4.5 12h3a3 3 0 0 0 0-6H6a2 2 0 0 1 0-4h6m-2-1 2 1-2 2"></path></svg>飞行轨迹</h2><span id="trajectory-view">俯视 · X↑</span></div>
+        <div class="difficulty-list" role="group" aria-label="选择实验任务">
+          <button class="difficulty active" type="button" data-difficulty="D3" aria-pressed="true" title="纯视觉任务：SenseFlight-Vis 双眼导航；本归档回放从同一侧通过"><strong>纯视觉任务</strong></button>
+          <button class="difficulty" type="button" data-difficulty="D4" aria-pressed="false" title="多模态任务：视觉与嗅觉，四目标气味源导航"><strong>多模态任务</strong></button>
+        </div>
+        <p id="task-summary" class="task-summary" role="status">正在加载纯视觉任务…</p>
+        <div class="trajectory-map"><canvas id="trajectory" role="img" aria-label="俯视轨迹：实线为已飞路径，虚线为未播放路径，箭头为当前果蝇，圆形为障碍"></canvas></div>
+        <div class="map-legend"><span><i class="legend-line"></i>已飞</span><span><i class="legend-pending"></i>未播放</span><span><i class="legend-fly"></i>果蝇</span><span><i class="legend-start"></i>起点</span><span><i class="legend-obstacle"></i>障碍</span><span><i class="legend-target"></i>目标</span></div>
+        <div class="position-readout"><canvas id="position-display" width="256" height="96" aria-label="当前位置与航程画面"></canvas></div>
+      </section>
+      <section class="output-card" aria-label="当前帧的归一化动作输出">
+        <div class="right-head"><h2><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12"></path><path d="M5 2v4M11 6v4M7 10v4"></path></svg>动作输出</h2><span>归一化 · ±1</span></div>
+        <canvas id="actions-display" width="320" height="208" aria-label="当前帧动作输出画面"></canvas>
+        <p class="output-caption">记录中的动作输出</p>
+      </section>
+    </aside>
+
+    <section id="model-network" class="model-network-card" aria-labelledby="network-title">
+      <div class="network-heading"><h2 id="network-title"><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 8 3-4m-3 4 3 4m2-8 3 3m-3 5 3-3"></path><circle cx="2.5" cy="8" r="1.5"></circle><circle cx="8" cy="2.5" r="1.5"></circle><circle cx="8" cy="13.5" r="1.5"></circle><circle cx="13.5" cy="8" r="1.5"></circle></svg>模型活动</h2><div class="network-heading-actions"><button id="network-expand" type="button" disabled><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4"></path></svg>放大</button></div></div>
+      <div class="network-canvas-shell"><canvas id="network-canvas" title="同步模型活动画面，可放大查看" aria-label="同步模型活动画面"></canvas><div id="network-load" class="network-load" role="status">正在加载活动画面…</div><p id="network-inspector" class="network-inspector">同步活动画面</p></div>
+      <div class="network-legend"><span class="network-color-scale"><i></i>负 ← 0 → 正</span><span class="network-help">同步活动画面</span><span id="network-sync">等待播放</span></div>
+    </section>
+  </main>
+  <footer class="footer"><span>SenseFlight-Vis · ConnectomeFlight → FlyBody</span><span>选定成功案例 · 活动画面 · 同帧同步</span></footer>
+
+  <dialog id="info-dialog" class="info-dialog" aria-labelledby="info-title">
+    <div class="dialog-head"><h2 id="info-title">来源与显示说明</h2><button id="info-close" type="button" aria-label="关闭来源与说明">×</button></div>
+    <div class="info-content">
+      <p>展示纯视觉和多模态任务中的选定成功片段。双眼、感官、双镜头、轨迹、动作与模型活动画面保持同帧同步。使用播放、时间轴、方向键或空格控制回放；T4/T5 可切换，两路镜头与模型活动可放大查看。</p>
+      <p>画面来自本地记录的预渲染展示，页面不执行模型推理或训练。模型活动表示连续模型响应，不是生物脉冲记录；连线与排布不表示完整脑解剖或因果归因。当前画面为选定案例，不代表整体性能或独立泛化测试。</p>
+      <p>公开展示不提供模型参数、原始活动数组或实验复现材料。模型图采用固定视角，不提供节点精确数值查询。</p>
+      <p>感谢上游 <strong>FlyVis</strong> 视觉模型与 <strong>FlyBody</strong> 果蝇身体模型。界面交互参考 <a href="https://github.com/Lulzx/fly-brain" target="_blank" rel="noopener noreferrer">fly-brain</a> 和 <a href="https://huggingface.co/spaces/Xenova/fruit-fly-simulation" target="_blank" rel="noopener noreferrer">Neural Canvas</a>。</p>
+    </div>
+  </dialog>
+  <dialog id="camera-dialog" class="camera-dialog" aria-labelledby="camera-dialog-title">
+    <div class="dialog-head"><h2 id="camera-dialog-title">高清飞行画面</h2><button id="camera-close" type="button" aria-label="关闭放大画面">×</button></div>
+    <canvas id="camera-image-large" width="1280" height="720" aria-label="同步飞行画面"></canvas>
+    <div class="dialog-transport" aria-label="放大飞行画面的回放控制"><button class="network-play" data-playback-toggle type="button" disabled>▶ 播放</button><span data-playback-time>0.00 / 0.00 s</span><input type="range" data-playback-timeline min="0" max="205" value="0" aria-label="放大飞行画面时间轴" disabled></div>
+    <div class="camera-dialog-foot"><span id="camera-dialog-resolution">1280 × 720</span><span>同帧同步回放</span></div>
+  </dialog>
+  <dialog id="network-dialog" class="network-dialog" aria-labelledby="network-dialog-title">
+    <div class="dialog-head"><div><h2 id="network-dialog-title">ConnectomeFlight-M-V · 从视觉到动作</h2><p>连续模型活动 · 蓝为负值，绿至黄为正值</p></div><button id="network-close" type="button" aria-label="关闭模型活动放大视图">×</button></div>
+    <div class="network-dialog-scroll"><canvas id="network-canvas-large" aria-label="放大的模型活动画面"></canvas></div>
+    <p id="network-dialog-inspector" class="network-inspector">同步活动画面 · 固定视角</p>
+    <div class="network-dialog-foot"><span id="network-dialog-status">等待播放</span><button class="network-play" data-playback-toggle type="button" disabled>▶ 播放</button><input type="range" data-playback-timeline min="0" max="205" value="0" aria-label="放大模型活动时间轴" disabled></div>
+  </dialog>
+  <video id="replay-source" muted playsinline preload="auto" aria-hidden="true"></video>
+</body>
+</html>

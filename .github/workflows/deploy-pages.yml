@@ -1,0 +1,52 @@
+name: Deploy demonstration
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check presentation-only file boundary
+        shell: python
+        run: |
+          import pathlib, subprocess
+          expected = {
+              '.github/workflows/deploy-pages.yml', '.gitignore', 'AGENTS.md',
+              'README.md', 'serve.py', 'ATTRIBUTION.md', 'LICENSES/fly-brain-MIT.txt', 'docs/NAMING.md',
+              'dist/index.html', 'dist/v3.html', 'dist/app.js', 'dist/style.css',
+              'dist/model-network.css', 'dist/visual-polish.css', 'dist/demo.css',
+              'dist/favicon.svg', 'dist/media/d3.mp4', 'dist/media/d4.mp4',
+          }
+          tracked = set(subprocess.check_output(['git','ls-files','-z']).decode().strip('\0').split('\0'))
+          actual = {str(p) for p in pathlib.Path('.').rglob('*') if p.is_file() and '.git' not in p.parts}
+          assert tracked == expected, f'Unexpected tracked files: {tracked ^ expected}'
+          assert actual == expected, f'Unexpected packaged files: {actual ^ expected}'
+          for name in expected:
+              p = pathlib.Path(name)
+              assert not p.is_symlink(), name
+              if p.suffix == '.mp4':
+                  assert p.read_bytes()[4:8] == b'ftyp', name
+              else:
+                  content = p.read_text()
+                  for forbidden in ['weights.f32','policy.f32','vision.f32','metadata.json',
+                                    'checkpointSha256','recordingSha256','credential','replays-20261015']:
+                      assert forbidden not in content or name == '.github/workflows/deploy-pages.yml', name
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
