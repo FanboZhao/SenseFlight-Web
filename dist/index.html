@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="./model-network.css?v=interactive-20261015">
   <link rel="stylesheet" href="./visual-polish.css?v=interactive-20261015">
   <link rel="stylesheet" href="./demo.css?v=interactive-20261015">
-  <script type="module" src="./app.js?v=interactive-20261015"></script>
+  <script type="module" src="./app.js?v=topdown-marker-20261015"></script>
 </head>
 <body>
   <header class="topbar">
@@ -58,7 +58,7 @@
         <div class="camera-overlay camera-overlay-bottom"><span id="sim-time">T + 0.000 S</span><span id="camera-position">高度 0.78 cm</span></div>
       </div>
       <div class="camera-card" aria-label="固定在场景上方的 MuJoCo 俯视摄像头">
-        <canvas id="topdown-image" width="1280" height="720" aria-label="同步飞行画面"></canvas>
+        <canvas id="topdown-image" width="1280" height="720" aria-label="固定俯视画面，金色圆圈标出当前果蝇位置"></canvas>
         <div class="camera-overlay camera-overlay-top"><span class="badge">TOPDOWN · 固定俯视</span><button id="topdown-expand" data-camera-view="topdown" class="camera-zoom-button" type="button" aria-label="放大固定俯视摄像头画面" title="放大固定俯视摄像头画面" disabled><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4"></path></svg></button></div>
         <div class="camera-overlay camera-overlay-bottom"><span id="topdown-time">T + 0.000 S</span><span>X → · Y ↑</span></div>
       </div>
@@ -103,7 +103,7 @@
   <dialog id="info-dialog" class="info-dialog" aria-labelledby="info-title">
     <div class="dialog-head"><h2 id="info-title">来源与显示说明</h2><button id="info-close" type="button" aria-label="关闭来源与说明">×</button></div>
     <div class="info-content">
-      <p>双眼、六边形采样、T4/T5、嗅觉、双镜头、轨迹与模型图使用同一回放帧。支持播放、逐帧、倍速、时间轴、镜头放大、模型图拖动旋转与细胞类型筛选。</p>
+      <p>双眼、六边形采样、T4/T5、嗅觉、双镜头、轨迹与模型图使用同一回放帧。俯视镜头以金色圆圈标出果蝇位置，标记随播放、暂停和跳帧同步更新。支持播放、逐帧、倍速、时间轴、镜头放大、模型图拖动旋转与细胞类型筛选。</p>
       <p>模型图和感官图采用量化后的显示颜色，保留连续模型响应的可视变化；不提供精确活动值、模型参数或训练材料。悬停可查看节点类型，不能读取训练参数。</p>
       <p>画面来自选定成功案例，不代表整体性能或独立泛化测试。亮点不是生物脉冲记录；图形布局不表示完整脑解剖或因果归因。气味场底色用于展示，轻微动画不改变回放读数。</p>
       <p id="network-population">正在读取展示布局…</p>

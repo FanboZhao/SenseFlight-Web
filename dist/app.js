@@ -3,8 +3,8 @@ import { OdorFieldLayer } from './odor-field.js?v=interactive-20261015';
 const byId = id => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TASKS = {
-  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-M-V', frames: 210, media: './media/d3.mp4', summary: '纯视觉导航 · 选定成功案例' },
-  D4: { name: '多模态任务', model: 'ConnectomeFlight-M-VO', frames: 408, media: './media/d4.mp4', summary: '视觉与嗅觉导航 · 选定成功案例' },
+  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-M-V', frames: 210, media: './media/d3.mp4', summary: '纯视觉导航 · 选定成功案例', overhead: { centerX: 6, altitude: 16 } },
+  D4: { name: '多模态任务', model: 'ConnectomeFlight-M-VO', frames: 408, media: './media/d4.mp4', summary: '视觉与嗅觉导航 · 选定成功案例', overhead: { centerX: 13, altitude: 26 } },
 };
 const CROPS = {follow:[0,0,1280,720],topdown:[1280,0,1280,720]};
 const modelNetwork = new ModelNetwork();
@@ -24,6 +24,47 @@ function paint(id, crop, smooth = true) {
   const ctx = canvas.getContext('2d', { alpha: false });
   ctx.imageSmoothingEnabled = smooth;
   ctx.drawImage(video, x,y,w,h, 0,0,w,h);
+  if (crop === CROPS.topdown) drawTopdownMarker(canvas, ctx);
+}
+
+function drawTopdownMarker(canvas, ctx) {
+  const position = state.scene?.positionsXYZCm[state.frame];
+  if (!position) return;
+  // Both fixed overhead cameras face straight down, with X right and Y up.
+  const camera = task().overhead, depth = camera.altitude - position[2];
+  if (depth <= 0) return;
+  const focal = canvas.height / (2 * Math.tan(Math.PI / 8));
+  const x = canvas.width / 2 + (position[0] - camera.centerX) * focal / depth;
+  const y = canvas.height / 2 - position[1] * focal / depth;
+  if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) return;
+  const bounds = canvas.getBoundingClientRect();
+  const scale = Math.min(bounds.width / canvas.width, bounds.height / canvas.height);
+  if (scale <= 0) return;
+  const unit = 1 / scale;
+  ctx.save(); ctx.translate(x,y); ctx.scale(unit,unit);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2);
+  ctx.strokeStyle = 'rgba(3,12,18,.92)'; ctx.lineWidth = 5; ctx.stroke();
+  ctx.strokeStyle = '#ffdf80'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath();
+  for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+    ctx.moveTo(dx*15,dy*15); ctx.lineTo(dx*19,dy*19);
+  }
+  ctx.strokeStyle = 'rgba(3,12,18,.92)'; ctx.lineWidth = 4; ctx.stroke();
+  ctx.strokeStyle = '#ffdf80'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+  const labelWidth = ctx.measureText('果蝇').width + 14, labelHeight = 22;
+  const labelX = x + (21 + labelWidth) * unit > canvas.width - 4 * unit ? -21 - labelWidth : 21;
+  const labelY = y - 31 * unit < 4 * unit ? 16 : -31;
+  ctx.beginPath(); ctx.moveTo(labelX > 0 ? 9 : -9, labelY < 0 ? -9 : 9);
+  ctx.lineTo(labelX > 0 ? labelX : labelX + labelWidth, labelY + labelHeight / 2);
+  ctx.strokeStyle = '#ffdf80'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.beginPath(); ctx.roundRect(labelX,labelY,labelWidth,labelHeight,5);
+  ctx.fillStyle = 'rgba(9,20,29,.92)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,223,128,.7)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = '#fff0bf'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('果蝇',labelX+7,labelY+labelHeight/2);
+  ctx.restore();
 }
 function render(frame = Math.floor(video.currentTime * 20 + .001)) {
   if (!state.ready || video.readyState < 2 || video.seeking) return;
