@@ -11,7 +11,7 @@ const CROPS = {
   position: [2304,720,256,64], odor: [2304,816,256,160], altitude: [2304,976,256,32], actions: [1984,1056,320,208],
 };
 const video = byId('replay-source');
-const state = { task: 'D3', frame: 0, cell: 0, ready: false, generation: 0, expanded: 'follow' };
+const state = { task: 'D3', frame: 0, cell: 0, ready: false, pendingFrame: null, generation: 0, expanded: 'follow' };
 let videoCallback = null;
 let videoListenerController = null;
 const task = () => TASKS[state.task];
@@ -28,6 +28,7 @@ function paint(id, crop, smooth = true) {
 function render(frame = Math.floor(video.currentTime * 20 + .001)) {
   if (!state.ready || video.readyState < 2 || video.seeking) return;
   state.frame = clamp(frame, 0, task().frames - 1);
+  state.pendingFrame = null;
   paint('camera-image', CROPS.follow); paint('topdown-image', CROPS.topdown);
   paint('eye-left', CROPS.eyeL, false); paint('eye-right', CROPS.eyeR, false);
   paint('hex-left', CROPS.hexL); paint('hex-right', CROPS.hexR);
@@ -51,7 +52,7 @@ function updateControls() {
   byId('sim-time').textContent = byId('topdown-time').textContent = `T + ${elapsed} S`;
   document.querySelectorAll('[data-playback-time]').forEach(el => { el.textContent = `${elapsed} / ${duration} s`; });
   document.querySelectorAll('#timeline, [data-playback-timeline]').forEach(el => {
-    el.max = String(task().frames-1); el.value = String(state.frame);
+    el.max = String(task().frames-1); el.value = String(state.pendingFrame ?? state.frame);
     el.style.setProperty('--progress', `${state.frame/(task().frames-1)*100}%`);
     el.setAttribute('aria-valuetext', `第 ${state.frame+1} 帧，共 ${task().frames} 帧`);
   });
@@ -80,7 +81,7 @@ function scheduleFrames(generation) {
 function loadScene(key) {
   if (!Object.hasOwn(TASKS,key)) key='D3';
   const generation=++state.generation;
-  video.pause(); state.ready=false; state.task=key; state.frame=0;
+  video.pause(); state.ready=false; state.task=key; state.frame=0; state.pendingFrame=null;
   if(videoCallback!==null) {
     if(video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(videoCallback);
     else cancelAnimationFrame(videoCallback);
@@ -112,7 +113,8 @@ function loadScene(key) {
 }
 function seek(frame) {
   if(!state.ready) return;
-  video.pause(); frame=clamp(Math.round(frame),0,task().frames-1);
+  frame=clamp(Math.round(frame),0,task().frames-1);
+  state.pendingFrame=frame; video.pause();
   video.currentTime=(frame+.1)/20;
   updateControls();
 }
@@ -126,8 +128,8 @@ video.addEventListener('seeked',()=>render());
 video.addEventListener('pause',updateControls);
 video.addEventListener('ended',()=>{render(task().frames-1);updateControls();});
 byId('play-button').addEventListener('click',togglePlay);
-byId('step-back').addEventListener('click',()=>seek(state.frame-1));
-byId('step-forward').addEventListener('click',()=>seek(state.frame+1));
+byId('step-back').addEventListener('click',()=>seek((state.pendingFrame ?? state.frame)-1));
+byId('step-forward').addEventListener('click',()=>seek((state.pendingFrame ?? state.frame)+1));
 document.querySelectorAll('#timeline, [data-playback-timeline]').forEach(el=>el.addEventListener('input',()=>seek(Number(el.value))));
 document.querySelectorAll('[data-playback-toggle]').forEach(el=>el.addEventListener('click',togglePlay));
 byId('speed').addEventListener('change',event=>{video.playbackRate=Number(event.target.value);});
@@ -149,8 +151,8 @@ byId('info-open').addEventListener('click',()=>byId('info-dialog').showModal());
 window.addEventListener('keydown',event=>{
   if(byId('info-dialog').open||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;
   if(event.code==='Space'&&document.activeElement?.tagName!=='BUTTON'){event.preventDefault();togglePlay();}
-  if(event.code==='ArrowLeft'){event.preventDefault();seek(state.frame-1);}
-  if(event.code==='ArrowRight'){event.preventDefault();seek(state.frame+1);}
+  if(event.code==='ArrowLeft'){event.preventDefault();seek((state.pendingFrame ?? state.frame)-1);}
+  if(event.code==='ArrowRight'){event.preventDefault();seek((state.pendingFrame ?? state.frame)+1);}
 });
 function bindPanelDivider() {
   const workspace = document.querySelector('.workspace');
