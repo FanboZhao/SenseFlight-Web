@@ -1,5 +1,5 @@
 import { ModelNetwork } from './model-network.js?v=interactive-20261015';
-import { OdorFieldLayer } from './odor-field.js?v=interactive-20261015';
+import { OdorFieldLayer } from './odor-field.js?v=soft-edges-20261015';
 const byId = id => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TASKS = {
