@@ -21,13 +21,16 @@ jobs:
       - name: Check presentation-only file boundary
         shell: python
         run: |
-          import pathlib, subprocess
+          import json, pathlib, struct, subprocess
           expected = {
               '.github/workflows/deploy-pages.yml', '.gitignore', 'AGENTS.md',
               'README.md', 'serve.py', 'ATTRIBUTION.md', 'LICENSES/fly-brain-MIT.txt', 'docs/NAMING.md',
               'dist/index.html', 'dist/v3.html', 'dist/app.js', 'dist/style.css',
               'dist/model-network.css', 'dist/visual-polish.css', 'dist/demo.css',
               'dist/favicon.svg', 'dist/media/d3.mp4', 'dist/media/d4.mp4',
+              'dist/model-network.js', 'dist/odor-field.js', 'dist/media/odor-field.png',
+              'dist/media/d3-display.json', 'dist/media/d4-display.json',
+              'dist/media/d3-appearance.png', 'dist/media/d4-appearance.png',
           }
           tracked = set(subprocess.check_output(['git','ls-files','-z']).decode().strip('\0').split('\0'))
           actual = {str(p) for p in pathlib.Path('.').rglob('*') if p.is_file() and '.git' not in p.parts}
@@ -38,11 +41,37 @@ jobs:
               assert not p.is_symlink(), name
               if p.suffix == '.mp4':
                   assert p.read_bytes()[4:8] == b'ftyp', name
+              elif p.suffix == '.png':
+                  assert p.read_bytes()[:8] == b'\x89PNG\r\n\x1a\n', name
               else:
                   content = p.read_text()
                   for forbidden in ['weights.f32','policy.f32','vision.f32','metadata.json',
-                                    'checkpointSha256','recordingSha256','credential','replays-20261015']:
+                                    'checkpointSha256','recordingSha256','credential','replays-20261015',
+                                    'agreementMaxAbsError','parameterUpdates','optimizer','state_dict']:
                       assert forbidden not in content or name == '.github/workflows/deploy-pages.yml', name
+          common = {'format','difficulty','frames','stepDtSeconds','hexUV','positionsXYZCm','distanceCm',
+                    'actions','obstaclePositionsXYCm','obstacleRadiiCm','sourcePositionXYCm','sensorOffsets','networkLayout'}
+          optional = {'goalPositionsXYCm','activeGoal','odorConcentrations','odorFeatures'}
+          for task, frames in [('d3',210),('d4',408)]:
+              scene = json.loads(pathlib.Path(f'dist/media/{task}-display.json').read_text())
+              assert set(scene) == common | (optional if task == 'd4' else set())
+              assert scene['format'] == 'presentation-v2' and scene['frames'] == frames
+              assert len(scene['positionsXYZCm']) == len(scene['actions']) == len(scene['distanceCm']) == frames
+              assert all(len(p)==3 and all(round(v,2)==v for v in p) for p in scene['positionsXYZCm'])
+              assert all(len(p)==3 and all(round(v,3)==v for v in p) for p in scene['actions'])
+              layout = scene['networkLayout']
+              assert set(layout) == {'format','sampledNodesPerEye','fullNodesPerEye','cellTypes','layers','nodes','edges','appearance','imageWidth','imageHeight','rowsPerFrame'}
+              assert layout['format'] == 'rendered-rgba-v1'
+              assert all(set(t)=={'name','count','role'} for t in layout['cellTypes'])
+              assert all(set(l)=={'id','width','title'} for l in layout['layers'])
+              assert all(len(n)==9 and isinstance(n[0],str) for n in layout['nodes'])
+              assert all(len(e)==2 and all(isinstance(i,int) and 0<=i<len(layout['nodes']) for i in e) for e in layout['edges'])
+              assert set(scene['sensorOffsets']) == {'hexVisual','hexActivity','eyes','eyeSize'}
+              size=scene['sensorOffsets']['eyeSize']
+              assert layout['imageHeight'] == layout['rowsPerFrame']*frames + ((frames*2 + layout['imageWidth']//size - 1)//(layout['imageWidth']//size))*size
+              png = pathlib.Path(f'dist/media/{task}-appearance.png').read_bytes()
+              width,height,depth,color = struct.unpack('>IIBB',png[16:26])
+              assert (width,height,depth,color) == (layout['imageWidth'],layout['imageHeight'],8,6)
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

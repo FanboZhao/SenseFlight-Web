@@ -8,4 +8,4 @@
 
 Activity images show continuous model responses, not biological spikes or a complete anatomical brain. Selected successful replays do not establish aggregate performance or independent generalization.
 
-This repository distributes a presentation interface and rendered media only. Research code, model parameters and numerical replay data are excluded.
+This repository distributes a presentation interface, rendered media, quantized display colors and rounded replay readouts. Research code, model parameters and precise intermediate activity arrays are excluded. Display color quantization supports interactive rotation and filtering without publishing learned parameter values.

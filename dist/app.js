@@ -1,17 +1,17 @@
+import { ModelNetwork } from './model-network.js?v=interactive-20261015';
+import { OdorFieldLayer } from './odor-field.js?v=interactive-20261015';
 const byId = id => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TASKS = {
   D3: { name: '纯视觉任务', model: 'ConnectomeFlight-M-V', frames: 210, media: './media/d3.mp4', summary: '纯视觉导航 · 选定成功案例' },
   D4: { name: '多模态任务', model: 'ConnectomeFlight-M-VO', frames: 408, media: './media/d4.mp4', summary: '视觉与嗅觉导航 · 选定成功案例' },
 };
-const CROPS = {
-  follow: [0,0,1280,720], topdown: [1280,0,1280,720], network: [0,720,1600,480],
-  trajectory: [1600,720,384,640], eyeL: [1984,720,160,160], eyeR: [2144,720,160,160],
-  hexL: [1984,880,160,176], hexR: [2144,880,160,176],
-  position: [2304,720,256,64], odor: [2304,816,256,160], altitude: [2304,976,256,32], actions: [1984,1056,320,208],
-};
+const CROPS = {follow:[0,0,1280,720],topdown:[1280,0,1280,720]};
+const modelNetwork = new ModelNetwork();
+const odorField = new OdorFieldLayer();
+const TRACE_COLOR = '#a9dfc7';
 const video = byId('replay-source');
-const state = { task: 'D3', frame: 0, cell: 0, ready: false, pendingFrame: null, generation: 0, expanded: 'follow' };
+const state = { task: 'D3', scene: null, frame: 0, cell: 0, ready: false, pendingFrame: null, generation: 0, expanded: 'follow' };
 let videoCallback = null;
 let videoListenerController = null;
 const task = () => TASKS[state.task];
@@ -30,14 +30,22 @@ function render(frame = Math.floor(video.currentTime * 20 + .001)) {
   state.frame = clamp(frame, 0, task().frames - 1);
   state.pendingFrame = null;
   paint('camera-image', CROPS.follow); paint('topdown-image', CROPS.topdown);
-  paint('eye-left', CROPS.eyeL, false); paint('eye-right', CROPS.eyeR, false);
-  paint('hex-left', CROPS.hexL); paint('hex-right', CROPS.hexR);
-  paint('t4-left', [state.cell*256,1360,128,144]); paint('t4-right', [state.cell*256+128,1360,128,144]);
-  paint('trajectory', CROPS.trajectory); paint('position-display', CROPS.position);
-  paint('actions-display', CROPS.actions); paint('camera-position', CROPS.altitude);
-  if (state.task === 'D4') paint('odor-display', CROPS.odor);
-  paint('network-canvas', CROPS.network);
-  if (byId('network-dialog').open) paint('network-canvas-large', CROPS.network);
+  modelNetwork.setFrame(state.frame);
+  for(let eye=0;eye<2;eye++) {
+    const canvas=byId(eye?'eye-right':'eye-left'),source=modelNetwork.eyeCanvas[eye];
+    canvas.width=source.width; canvas.height=source.height; canvas.getContext('2d').drawImage(source,0,0);
+    drawHex(byId(eye?'hex-right':'hex-left'),'visual',eye);
+    drawHex(byId(eye?'t4-right':'t4-left'),'activity',eye);
+  }
+  drawTrajectory();
+  const position=state.scene.positionsXYZCm[state.frame];
+  byId('position-xy').textContent=`${position[0].toFixed(2)}, ${position[1].toFixed(2)}`;
+  byId('distance').textContent=`${state.scene.distanceCm[state.frame].toFixed(2)} cm`;
+  byId('camera-position').textContent=`高度 ${position[2].toFixed(2)} cm`;
+  if(state.scene.odorConcentrations) {
+    state.scene.odorConcentrations[state.frame].forEach((v,i)=>{byId(`odor-${i}`).textContent=v.toFixed(4);byId(`odor-meter-${i}`).value=v;});
+    const [mean,diff]=state.scene.odorFeatures[state.frame];byId('odor-features').textContent=`强度 ${mean.toFixed(3)} · 左右差 ${diff.toFixed(3)}`;
+  }
   if (byId('camera-dialog').open) paint('camera-image-large', CROPS[state.expanded]);
   updateControls();
 }
@@ -56,14 +64,13 @@ function updateControls() {
     el.style.setProperty('--progress', `${state.frame/(task().frames-1)*100}%`);
     el.setAttribute('aria-valuetext', `第 ${state.frame+1} 帧，共 ${task().frames} 帧`);
   });
-  const status = `${task().name} · ${playing ? '● 同步播放' : '○ 当前帧'} · ${state.frame+1} / ${task().frames}`;
-  byId('network-sync').textContent = byId('network-dialog-status').textContent = status;
+  modelNetwork.setPlaybackActive(playing);
 }
 function setEnabled(enabled) {
   document.querySelectorAll('#play-button, #step-back, #step-forward, #timeline, #network-expand, [data-camera-view], [data-playback-toggle], [data-playback-timeline]').forEach(el => { el.disabled = !enabled; });
 }
 function showError() {
-  state.ready = false; video.pause(); setEnabled(false);
+  state.ready = false; video.pause(); setEnabled(false); modelNetwork.clearScene();
   byId('loading').textContent = '展示画面加载失败，请重新选择任务重试。';
   byId('loading').classList.remove('hidden');
 }
@@ -78,10 +85,11 @@ function scheduleFrames(generation) {
     videoCallback = requestAnimationFrame(() => { render(); scheduleFrames(generation); });
   }
 }
-function loadScene(key) {
+async function loadScene(key) {
   if (!Object.hasOwn(TASKS,key)) key='D3';
   const generation=++state.generation;
-  video.pause(); state.ready=false; state.task=key; state.frame=0; state.pendingFrame=null;
+  video.pause(); state.ready=false; state.task=key; state.scene=null; state.frame=0; state.pendingFrame=null;
+  modelNetwork.clearScene();
   if(videoCallback!==null) {
     if(video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(videoCallback);
     else cancelAnimationFrame(videoCallback);
@@ -89,28 +97,36 @@ function loadScene(key) {
   videoListenerController?.abort(); videoListenerController=new AbortController();
   const options={signal:videoListenerController.signal};
   setEnabled(false);
-  byId('loading').textContent='正在加载同步展示画面…'; byId('loading').classList.remove('hidden');
-  byId('network-load').classList.add('hidden');
-  document.body.classList.toggle('multimodal',key==='D4'); byId('odor-card').hidden=key!=='D4';
+  byId('loading').textContent='正在加载同步展示…';byId('loading').classList.remove('hidden');
+  document.body.classList.toggle('multimodal',key==='D4');byId('odor-card').hidden=key!=='D4';
   document.querySelector('.model-tag').textContent=task().model;
   document.querySelector('.column-heading h1').lastChild.textContent=key==='D4'?'视嗅输入':'视觉输入';
   document.querySelector('.column-heading > span').textContent=key==='D4'?'双眼 + 触角':'左眼 / 右眼';
   document.querySelector('.eye-card .card-tag').textContent=key==='D4'?'64 × 64':'32 × 32';
-  byId('camera-resolution-badge').textContent=' · HD';
-  byId('task-summary').textContent=task().summary; byId('scene-id').textContent='';
-  byId('network-dialog-title').textContent=`${task().model} · 模型活动`;
+  byId('camera-resolution-badge').textContent=' · HD';byId('task-summary').textContent=task().summary;byId('scene-id').textContent='';
+  byId('network-dialog-title').textContent=`${task().model} · ${key==='D4'?'视嗅融合到动作':'从视觉到动作'}`;
   document.querySelector('.footer span').textContent=`${key==='D4'?'SenseFlight-VisOlf':'SenseFlight-Vis'} · ConnectomeFlight → FlyBody`;
-  document.querySelectorAll('[data-difficulty]').forEach(button => {
-    const active=button.dataset.difficulty===key; button.classList.toggle('active',active); button.setAttribute('aria-pressed',String(active));
-  });
-  video.addEventListener('loadeddata', () => {
-    if(generation!==state.generation) return;
-    state.ready=true; byId('loading').classList.add('hidden'); setEnabled(true); render(0); scheduleFrames(generation);
-  },{...options,once:true});
-  video.addEventListener('error',showError,{...options,once:true});
-  video.src=task().media; video.load();
+  document.querySelectorAll('[data-difficulty]').forEach(button=>{const active=button.dataset.difficulty===key;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
   const url=new URL(location.href);url.searchParams.set('task',key);history.replaceState(null,'',url);
+  try {
+    const mediaReady=new Promise((resolve,reject)=>{
+      video.addEventListener('loadeddata',resolve,{...options,once:true});
+      video.addEventListener('error',()=>reject(new Error('视频加载失败')),{...options,once:true});
+    });
+    video.src=task().media;video.load();
+    const [scene]=await Promise.all([
+      fetch(`./media/${key.toLowerCase()}-display.json?v=interactive-20261015`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
+      mediaReady,key==='D4'?odorField.load():Promise.resolve(),
+    ]);
+    if(generation!==state.generation)return;
+    if(scene.format!=='presentation-v2'||scene.difficulty!==key||scene.frames!==task().frames)throw new Error('展示帧数不匹配');
+    state.scene=scene;
+    await modelNetwork.loadScene(scene,task().name);
+    if(generation!==state.generation)return;
+    state.ready=true;byId('loading').classList.add('hidden');setEnabled(true);render(0);scheduleFrames(generation);
+  }catch(error){if(generation===state.generation){console.error(error);showError();}}
 }
+
 function seek(frame) {
   if(!state.ready) return;
   frame=clamp(Math.round(frame),0,task().frames-1);
@@ -145,15 +161,145 @@ document.querySelectorAll('[data-camera-view]').forEach(button=>button.addEventL
   byId('camera-dialog-resolution').textContent=`1280 × 720 · ${task().name}`;
   byId('camera-dialog').showModal();render();
 }));
-byId('network-expand').addEventListener('click',()=>{byId('network-dialog').showModal();render();});
-for(const id of ['info','camera','network']) byId(`${id}-close`).addEventListener('click',()=>byId(`${id}-dialog`).close());
+
+for(const id of ['info','camera']) byId(`${id}-close`).addEventListener('click',()=>byId(`${id}-dialog`).close());
 byId('info-open').addEventListener('click',()=>byId('info-dialog').showModal());
+byId('cell-types-open').addEventListener('click',()=>{byId('cell-type-details').open=true;byId('info-dialog').showModal();byId('cell-type-details').scrollIntoView({block:'nearest'});});
+byId('network-cell-types').addEventListener('click',event=>{if(event.target.closest('button'))byId('info-dialog').close();});
+byId('camera-original').addEventListener('click',()=>{byId('camera-original').href=byId('camera-image-large').toDataURL('image/png');});
+window.addEventListener('resize',()=>{if(state.ready)render();});
+
 window.addEventListener('keydown',event=>{
   if(byId('info-dialog').open||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;
   if(event.code==='Space'&&document.activeElement?.tagName!=='BUTTON'){event.preventDefault();togglePlay();}
   if(event.code==='ArrowLeft'){event.preventDefault();seek((state.pendingFrame ?? state.frame)-1);}
   if(event.code==='ArrowRight'){event.preventDefault();seek((state.pendingFrame ?? state.frame)+1);}
 });
+function canvasContext(canvas) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const width = Math.max(1, canvas.clientWidth);
+  const height = Math.max(1, canvas.clientHeight);
+  const pixelWidth = Math.round(width * dpr), pixelHeight = Math.round(height * dpr);
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth; canvas.height = pixelHeight;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  return { ctx, width, height };
+}
+
+function hexGeometry(width, height) {
+  const unit = Math.min((width - 9) / 28.8, (height - 9) / 32.5);
+  return { unit, radius: unit / Math.sqrt(3) * 0.97, x0: width / 2, y0: height / 2 };
+}
+function hexCenter(uv, geometry) {
+  const [u, v] = uv;
+  // FlyVis BoxEye receptor_centers are stored as (y, x) = (u + v/2, v).
+  // Scale x by sqrt(3)/2 only to draw a regular hex lattice.
+  return [geometry.x0 + v * Math.sqrt(3) / 2 * geometry.unit,
+    geometry.y0 + (u + v / 2) * geometry.unit];
+}
+
+function drawHex(canvas, kind, eye) {
+  const { ctx, width, height } = canvasContext(canvas);
+  const geometry = hexGeometry(width, height);
+  const uv = state.scene.hexUV;
+  ctx.fillStyle = '#0d1820';
+  ctx.fillRect(0, 0, width, height);
+  for (let i = 0; i < uv.length; i++) {
+    const [x, y] = hexCenter(uv[i], geometry);
+    const index = kind === 'visual' ? state.scene.sensorOffsets.hexVisual + eye * 721 + i : state.scene.sensorOffsets.hexActivity + (eye * 8 + state.cell) * 721 + i;
+    ctx.fillStyle = modelNetwork.colorAt(index);
+    ctx.beginPath();
+    for (let point = 0; point < 6; point++) {
+      const angle = point * Math.PI / 3;
+      const px = x + Math.cos(angle) * geometry.radius;
+      const py = y + Math.sin(angle) * geometry.radius;
+      if (point === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+
+function drawTrajectory() {
+  const canvas = byId('trajectory');
+  const { ctx, width, height } = canvasContext(canvas);
+  const points = state.scene.positionsXYZCm;
+  const obstacles = state.scene.obstaclePositionsXYCm;
+  const source = state.scene.sourcePositionXYCm;
+  const allX = [...points.map((p) => p[0]), ...obstacles.map((p) => p[0]), ...(state.scene.goalPositionsXYCm || []).map(p => p[0]), source[0]];
+  const allY = [...points.map((p) => p[1]), ...obstacles.map((p) => p[1]), ...(state.scene.goalPositionsXYCm || []).map(p => p[1]), source[1]];
+  const minX = Math.min(...allX) - 2.5, maxX = Math.max(...allX) + 2.5;
+  const minY = Math.min(...allY) - 2.5, maxY = Math.max(...allY) + 2.5;
+  // Rotate the display by 90 degrees in a tall panel; preserve uniform scale and scene geometry.
+  const vertical = height > width * 1.2;
+  const scale = Math.min((width - 34) / (vertical ? maxY - minY : maxX - minX), (height - 34) / (vertical ? maxX - minX : maxY - minY));
+  const worldWidth = (vertical ? maxY - minY : maxX - minX) * scale, worldHeight = (vertical ? maxX - minX : maxY - minY) * scale;
+  const offsetX = (width - worldWidth) / 2, offsetY = (height - worldHeight) / 2;
+  const project = (p) => vertical
+    ? [width - offsetX - (p[1] - minY) * scale, height - offsetY - (p[0] - minX) * scale]
+    : [offsetX + (p[0] - minX) * scale, height - offsetY - (p[1] - minY) * scale];
+  const unproject = (p) => vertical
+    ? [minX + (height - offsetY - p[1]) / scale, minY + (width - offsetX - p[0]) / scale]
+    : [minX + (p[0] - offsetX) / scale, minY + (height - offsetY - p[1]) / scale];
+  const odor = state.scene.odorConcentrations;
+  byId('trajectory-view').textContent = vertical ? '俯视 · X↑' : '俯视 · X→';
+  ctx.fillStyle = '#0d1820'; ctx.fillRect(0, 0, width, height);
+  if (odor) odorField.draw(ctx, { width, height, unproject, source, time: state.frame * .05 });
+  ctx.strokeStyle = 'rgba(170,199,207,.07)'; ctx.lineWidth = 1;
+  const extraX = (vertical ? offsetY : offsetX) / scale, extraY = (vertical ? offsetX : offsetY) / scale;
+  for (let x = Math.ceil((minX - extraX) / 2) * 2; x <= maxX + extraX; x += 2) {
+    const [px, py] = project([x, 0]); ctx.beginPath(); ctx.moveTo(vertical ? 0 : px, vertical ? py : 0); ctx.lineTo(vertical ? width : px, vertical ? py : height); ctx.stroke();
+  }
+  for (let y = Math.ceil((minY - extraY) / 2) * 2; y <= maxY + extraY; y += 2) {
+    const [px, py] = project([0, y]); ctx.beginPath(); ctx.moveTo(vertical ? px : 0, vertical ? 0 : py); ctx.lineTo(vertical ? px : width, vertical ? height : py); ctx.stroke();
+  }
+  ctx.fillStyle = '#79949f'; ctx.font = '9px ui-monospace,monospace'; ctx.textAlign = 'left';
+  ctx.fillText(vertical ? 'Y ←' : 'Y ↑', 11, 17);
+  ctx.fillText('2 cm', 11, height - 19); ctx.strokeStyle = '#79949f';
+  ctx.beginPath(); ctx.moveTo(11, height - 11); ctx.lineTo(11 + scale * 2, height - 11); ctx.stroke();
+  obstacles.forEach((position, i) => {
+    const [x, y] = project(position), radius = state.scene.obstacleRadiiCm[i] * scale;
+    ctx.fillStyle = '#2b414b'; ctx.strokeStyle = '#728b96'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(x, y, Math.max(radius, 3), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#d2e0e5'; ctx.font = '9px ui-monospace,monospace'; ctx.textAlign = 'center';
+    ctx.fillText(String(i + 1), x, y + 3);
+  });
+  (state.scene.goalPositionsXYCm || []).forEach((goal, index) => {
+    if (index === state.scene.activeGoal) return;
+    const [gx, gy] = project(goal);
+    ctx.strokeStyle = '#92a5b6'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(gx, gy, 5, 0, Math.PI * 2); ctx.stroke();
+  });
+  const [tx, ty] = project(source);
+  ctx.strokeStyle = '#dfbb83'; ctx.lineWidth = 1.8;
+  ctx.beginPath(); ctx.arc(tx, ty, 7, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx - 12, ty); ctx.lineTo(tx - 8, ty); ctx.moveTo(tx + 8, ty); ctx.lineTo(tx + 12, ty); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx, ty - 12); ctx.lineTo(tx, ty - 8); ctx.moveTo(tx, ty + 8); ctx.lineTo(tx, ty + 12); ctx.stroke();
+  ctx.fillStyle = '#dfbb83'; ctx.font = '600 10px -apple-system, sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(state.scene.odorFeatures ? '气味源' : '目标', tx, ty + 25);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.strokeStyle = '#617b84'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 5]);
+  ctx.beginPath(); points.forEach((p, i) => { const [x, y] = project(p); if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = TRACE_COLOR; ctx.lineWidth = 2.5;
+  ctx.beginPath(); points.slice(0, state.frame + 1).forEach((p, i) => { const [x, y] = project(p); if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke();
+  const [sx, sy] = project(points[0]);
+  ctx.fillStyle = '#0d1820'; ctx.strokeStyle = TRACE_COLOR; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(sx, sy, 3.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#9fbbb4'; ctx.fillText('起点', sx, sy + 22);
+  const position = points[state.frame], previous = points[Math.max(0, state.frame - 1)];
+  const following = points[Math.min(points.length - 1, state.frame + 1)];
+  const [fx, fy] = project(position);
+  ctx.fillStyle = '#a9dfc71a'; ctx.beginPath(); ctx.arc(fx, fy, 16, 0, Math.PI * 2); ctx.fill();
+  const angle = Math.atan2(following[1] - previous[1], following[0] - previous[0]);
+  ctx.save(); ctx.translate(fx, fy); ctx.rotate(-angle - (vertical ? Math.PI / 2 : 0));
+  ctx.fillStyle = TRACE_COLOR; ctx.strokeStyle = '#0d1820'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, -6); ctx.lineTo(-4, 0); ctx.lineTo(-7, 6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+}
+
 function bindPanelDivider() {
   const workspace = document.querySelector('.workspace');
   const flight = byId('flight-panel');

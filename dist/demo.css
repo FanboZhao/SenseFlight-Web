@@ -1,16 +1,4 @@
-/* Rendered views share one media clock. */
+/* Cameras share a media clock; all other panels render at native resolution. */
 #replay-source { position:fixed; left:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none; }
 .camera-card > canvas { display:block; width:100%; height:100%; object-fit:contain; background:#080f15; }
-#camera-position { width:108px; height:16px; object-fit:contain; background:#09131dba; border-radius:4px; }
 .camera-dialog > canvas { display:block; width:100%; height:auto; min-height:0; max-height:calc(100dvh - 180px); object-fit:contain; background:#080f15; }
-#network-canvas, #network-canvas-large { object-fit:contain; background:#0b1520; cursor:default; }
-#network-canvas:active, #network-canvas-large:active { cursor:default; }
-#network-canvas-large { min-width:0; }
-#trajectory { object-fit:contain; background:#0d1820; }
-#position-display, #odor-display, #actions-display { display:block; width:100%; height:auto; min-height:0; object-fit:contain; }
-.position-readout { display:block; padding-top:0; }
-#odor-display { flex:1; max-height:110px; }
-#actions-display { max-height:155px; }
-#network-inspector { display:none; }
-
-#position-display { height:42px; }
