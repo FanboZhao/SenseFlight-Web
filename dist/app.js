@@ -1,10 +1,10 @@
-import { ModelNetwork } from './model-network.js?v=release-20261016';
-import { OdorFieldLayer } from './odor-field.js?v=release-20261016';
+import { ModelNetwork } from './model-network.js?v=release-20261016-topdown17';
+import { OdorFieldLayer } from './odor-field.js?v=release-20261016-topdown17';
 const byId = id => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TASKS = {
-  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-V · T4/T5 · 3131 参数', frames: 187, media: './media/d3.mp4?v=release-20261016', summary: '随机树林 · 绕行抵达可见棋盘目标' },
-  D4: { name: '多模态任务', model: 'ConnectomeFlight-M-VO', frames: 408, media: './media/d4.mp4?v=release-20261016', summary: '视觉与嗅觉导航 · 选定成功案例' },
+  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-V · T4/T5 · 3131 参数', frames: 187, media: './media/d3.mp4?v=release-20261016-topdown17', summary: '随机树林 · 绕行抵达可见棋盘目标' },
+  D4: { name: '多模态任务', model: 'ConnectomeFlight-M-VO', frames: 408, media: './media/d4.mp4?v=release-20261016-topdown17', summary: '视觉与嗅觉导航 · 选定成功案例' },
 };
 const CROPS = {follow:[0,0,1280,720],topdown:[1280,0,1280,720]};
 const modelNetwork = new ModelNetwork();
@@ -128,7 +128,7 @@ async function loadScene(key) {
     });
     video.src=task().media;video.load();
     const [scene]=await Promise.all([
-      fetch(`./media/${key.toLowerCase()}-display.json?v=release-20261016`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
+      fetch(`./media/${key.toLowerCase()}-display.json?v=release-20261016-topdown17`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
       mediaReady,key==='D4'?odorField.load():Promise.resolve(),
     ]);
     if(generation!==state.generation)return;
