@@ -41,8 +41,12 @@ export class ModelNetwork {
     if (topology.format !== 'rendered-rgba-v1') throw new Error('模型活动版本不匹配');
     this.topology = topology;
     this.multimodal = topology.layers.some(l => l.id === 'odorMemory');
-    this.stages = this.multimodal ? [...STAGES,
-      { id:'odorInput', x:.625 }, { id:'odorMemory', x:.735 }] : STAGES;
+    const stages = STAGES.map(stage => {
+      const layer = topology.layers.find(item => item.id === stage.id);
+      return layer ? { ...stage, detail: stage.detail.replace(/^\d+/, String(layer.width)) } : stage;
+    });
+    this.stages = this.multimodal ? [...stages,
+      { id:'odorInput', x:.625 }, { id:'odorMemory', x:.735 }] : stages;
     this.projectionCache = new Map(); this.hover = null; this.cellType = -1; this.focus = 'all';
     byId('network-population').textContent = `${(topology.fullNodesPerEye * 2).toLocaleString()} 个视觉单元 · 显示 ${(topology.sampledNodesPerEye * 2).toLocaleString()} 个 · ${topology.cellTypes.length} 类细胞`;
     byId('network-sampling').textContent = '节点使用量化后的显示颜色；图形布局与交互保留，精确活动数值不公开。';
@@ -63,7 +67,7 @@ export class ModelNetwork {
   async loadScene(scene, taskName) {
     const loadId = ++this.loadId;
     const layout = scene.networkLayout;
-    const image = new Image(); image.src = `${layout.appearance}?v=interactive-20261015`;
+    const image = new Image(); image.src = `${layout.appearance}?v=release-20261016`;
     await image.decode();
     if (loadId !== this.loadId) return;
     if (image.width !== layout.imageWidth || image.height !== layout.imageHeight) throw new Error('展示颜色贴图尺寸不匹配');
@@ -200,14 +204,16 @@ export class ModelNetwork {
     const bg = ctx.createLinearGradient(0, 0, width, height); bg.addColorStop(0, '#0b1520'); bg.addColorStop(.48, '#0c1a20'); bg.addColorStop(1, '#0b141b');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
     ctx.lineWidth = 1;
-    for (const stage of STAGES.filter(stage => ['pooled', 'readout', 'latent', 'control'].includes(stage.id))) {
+    for (const stage of this.stages.filter(stage => ['pooled', 'readout', 'latent', 'control'].includes(stage.id))) {
       const bandWidth = width * (stage.id === 'pooled' ? .095 : .078);
       ctx.fillStyle = '#afcbd005'; ctx.fillRect(stage.x * width - bandWidth / 2, 43, bandWidth, height - 76);
       ctx.strokeStyle = '#afcbd012'; ctx.beginPath(); ctx.moveTo(stage.x * width - bandWidth / 2, 43); ctx.lineTo(stage.x * width - bandWidth / 2, height - 33); ctx.stroke();
     }
     const compact = width < 760 || height < 320;
-    for (const stage of STAGES) {
-      const x = stage.x * width, labels = compact || width < 1100 ? COMPACT_LABELS[stage.id] : [stage.name, stage.detail];
+    for (const stage of this.stages.filter(stage => stage.name)) {
+      const layer = this.topology.layers.find(item => item.id === stage.id);
+      const compactLabels = [COMPACT_LABELS[stage.id][0], layer ? `${layer.width}${stage.id === 'actions' ? '项' : '维'}` : COMPACT_LABELS[stage.id][1]];
+      const x = stage.x * width, labels = compact || width < 1100 ? compactLabels : [stage.name, stage.detail];
       ctx.textAlign = 'center'; ctx.fillStyle = '#dceae7'; ctx.font = `600 ${width < 640 ? 11 : 12}px -apple-system, sans-serif`;
       // Keep semantic names readable when several stages share a narrow panel.
       const titleLines = compact && width < 520 ? [labels[0].slice(0, 2), labels[0].slice(2)] : [labels[0]];

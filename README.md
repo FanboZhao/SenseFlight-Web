@@ -9,3 +9,5 @@
 本地预览：`python3 serve.py`
 
 视觉与身体模型来自上游 FlyVis、FlyBody；界面参考 fly-brain 与 Neural Canvas。参见 [来源说明](ATTRIBUTION.md)。
+
+当前纯视觉展示为随机树林中的可见棋盘目标导航，采用 ConnectomeFlight-V（T4/T5 读出、3131 参数），网络隐藏层均为 17 维。视觉跟随镜头采用侧后方视角；两项任务的俯视画面均使用细线小圆环标出果蝇。

@@ -1,10 +1,10 @@
-import { ModelNetwork } from './model-network.js?v=interactive-20261015';
-import { OdorFieldLayer } from './odor-field.js?v=soft-edges-20261015';
+import { ModelNetwork } from './model-network.js?v=release-20261016';
+import { OdorFieldLayer } from './odor-field.js?v=release-20261016';
 const byId = id => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TASKS = {
-  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-M-V', frames: 210, media: './media/d3.mp4', summary: '纯视觉导航 · 选定成功案例', overhead: { centerX: 6, altitude: 16 } },
-  D4: { name: '多模态任务', model: 'ConnectomeFlight-M-VO', frames: 408, media: './media/d4.mp4', summary: '视觉与嗅觉导航 · 选定成功案例', overhead: { centerX: 13, altitude: 26 } },
+  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-V · T4/T5 · 3131 参数', frames: 187, media: './media/d3.mp4?v=release-20261016', summary: '随机树林 · 绕行抵达可见棋盘目标' },
+  D4: { name: '多模态任务', model: 'ConnectomeFlight-M-VO', frames: 408, media: './media/d4.mp4?v=release-20261016', summary: '视觉与嗅觉导航 · 选定成功案例' },
 };
 const CROPS = {follow:[0,0,1280,720],topdown:[1280,0,1280,720]};
 const modelNetwork = new ModelNetwork();
@@ -28,42 +28,14 @@ function paint(id, crop, smooth = true) {
 }
 
 function drawTopdownMarker(canvas, ctx) {
-  const position = state.scene?.positionsXYZCm[state.frame];
-  if (!position) return;
-  // Both fixed overhead cameras face straight down, with X right and Y up.
-  const camera = task().overhead, depth = camera.altitude - position[2];
-  if (depth <= 0) return;
-  const focal = canvas.height / (2 * Math.tan(Math.PI / 8));
-  const x = canvas.width / 2 + (position[0] - camera.centerX) * focal / depth;
-  const y = canvas.height / 2 - position[1] * focal / depth;
-  if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) return;
+  const point = state.scene?.topdownMarkerXY[state.frame];
+  if (!point) return;
   const bounds = canvas.getBoundingClientRect();
   const scale = Math.min(bounds.width / canvas.width, bounds.height / canvas.height);
   if (scale <= 0) return;
-  const unit = 1 / scale;
-  ctx.save(); ctx.translate(x,y); ctx.scale(unit,unit);
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2);
-  ctx.strokeStyle = 'rgba(3,12,18,.92)'; ctx.lineWidth = 5; ctx.stroke();
-  ctx.strokeStyle = '#ffdf80'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.beginPath();
-  for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-    ctx.moveTo(dx*15,dy*15); ctx.lineTo(dx*19,dy*19);
-  }
-  ctx.strokeStyle = 'rgba(3,12,18,.92)'; ctx.lineWidth = 4; ctx.stroke();
-  ctx.strokeStyle = '#ffdf80'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-  const labelWidth = ctx.measureText('果蝇').width + 14, labelHeight = 22;
-  const labelX = x + (21 + labelWidth) * unit > canvas.width - 4 * unit ? -21 - labelWidth : 21;
-  const labelY = y - 31 * unit < 4 * unit ? 16 : -31;
-  ctx.beginPath(); ctx.moveTo(labelX > 0 ? 9 : -9, labelY < 0 ? -9 : 9);
-  ctx.lineTo(labelX > 0 ? labelX : labelX + labelWidth, labelY + labelHeight / 2);
-  ctx.strokeStyle = '#ffdf80'; ctx.lineWidth = 1.2; ctx.stroke();
-  ctx.beginPath(); ctx.roundRect(labelX,labelY,labelWidth,labelHeight,5);
-  ctx.fillStyle = 'rgba(9,20,29,.92)'; ctx.fill();
-  ctx.strokeStyle = 'rgba(255,223,128,.7)'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.fillStyle = '#fff0bf'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText('果蝇',labelX+7,labelY+labelHeight/2);
+  ctx.save(); ctx.translate(point[0], point[1]); ctx.scale(1 / scale, 1 / scale);
+  ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2);
+  ctx.strokeStyle = '#c4fff1'; ctx.lineWidth = 1.4; ctx.stroke();
   ctx.restore();
 }
 function render(frame = Math.floor(video.currentTime * 20 + .001)) {
@@ -156,7 +128,7 @@ async function loadScene(key) {
     });
     video.src=task().media;video.load();
     const [scene]=await Promise.all([
-      fetch(`./media/${key.toLowerCase()}-display.json?v=interactive-20261015`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
+      fetch(`./media/${key.toLowerCase()}-display.json?v=release-20261016`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
       mediaReady,key==='D4'?odorField.load():Promise.resolve(),
     ]);
     if(generation!==state.generation)return;
@@ -271,8 +243,11 @@ function drawTrajectory() {
   const points = state.scene.positionsXYZCm;
   const obstacles = state.scene.obstaclePositionsXYCm;
   const source = state.scene.sourcePositionXYCm;
-  const allX = [...points.map((p) => p[0]), ...obstacles.map((p) => p[0]), ...(state.scene.goalPositionsXYCm || []).map(p => p[0]), source[0]];
-  const allY = [...points.map((p) => p[1]), ...obstacles.map((p) => p[1]), ...(state.scene.goalPositionsXYCm || []).map(p => p[1]), source[1]];
+  const marker = state.scene.goalMarkerSegmentXYCm;
+  const markerPoint = fraction => marker[0].map((v, axis) => v + (marker[1][axis] - v) * (fraction + .5));
+  const markerEnds = marker ? [markerPoint(-.5), markerPoint(.5)] : [];
+  const allX = [...points.map((p) => p[0]), ...obstacles.map((p) => p[0]), ...markerEnds.map(p => p[0]), ...(state.scene.goalPositionsXYCm || []).map(p => p[0]), source[0]];
+  const allY = [...points.map((p) => p[1]), ...obstacles.map((p) => p[1]), ...markerEnds.map(p => p[1]), ...(state.scene.goalPositionsXYCm || []).map(p => p[1]), source[1]];
   const minX = Math.min(...allX) - 2.5, maxX = Math.max(...allX) + 2.5;
   const minY = Math.min(...allY) - 2.5, maxY = Math.max(...allY) + 2.5;
   // Rotate the display by 90 degrees in a tall panel; preserve uniform scale and scene geometry.
@@ -316,12 +291,20 @@ function drawTrajectory() {
     ctx.beginPath(); ctx.arc(gx, gy, 5, 0, Math.PI * 2); ctx.stroke();
   });
   const [tx, ty] = project(source);
+  if (marker) {
+    for (let column = 0; column < 3; column++) {
+      const a = project(markerPoint(column / 3 - .5));
+      const b = project(markerPoint((column + 1) / 3 - .5));
+      ctx.strokeStyle = column % 2 ? '#59656c' : '#e7edee'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+    }
+  }
   ctx.strokeStyle = '#dfbb83'; ctx.lineWidth = 1.8;
   ctx.beginPath(); ctx.arc(tx, ty, 7, 0, Math.PI * 2); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(tx - 12, ty); ctx.lineTo(tx - 8, ty); ctx.moveTo(tx + 8, ty); ctx.lineTo(tx + 12, ty); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(tx, ty - 12); ctx.lineTo(tx, ty - 8); ctx.moveTo(tx, ty + 8); ctx.lineTo(tx, ty + 12); ctx.stroke();
   ctx.fillStyle = '#dfbb83'; ctx.font = '600 10px -apple-system, sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText(state.scene.odorFeatures ? '气味源' : '目标', tx, ty + 25);
+  ctx.fillText(state.scene.odorFeatures ? '气味源' : marker ? '棋盘目标' : '目标', tx, ty + 25);
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   ctx.strokeStyle = '#617b84'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 5]);
   ctx.beginPath(); points.forEach((p, i) => { const [x, y] = project(p); if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.setLineDash([]);
@@ -340,6 +323,7 @@ function drawTrajectory() {
   ctx.fillStyle = TRACE_COLOR; ctx.strokeStyle = '#0d1820'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, -6); ctx.lineTo(-4, 0); ctx.lineTo(-7, 6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
 }
+
 
 function bindPanelDivider() {
   const workspace = document.querySelector('.workspace');
