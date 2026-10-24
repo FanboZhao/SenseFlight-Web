@@ -1,10 +1,10 @@
-import { ModelNetwork } from './model-network.js?v=release-20261016-topdown17';
-import { OdorFieldLayer } from './odor-field.js?v=release-20261016-topdown17';
+import { ModelNetwork } from './model-network.js?v=vis115-20261024';
+import { OdorFieldLayer } from './odor-field.js?v=vis115-20261024';
 const byId = id => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TASKS = {
-  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-V · T4/T5 · 3131 参数', frames: 187, media: './media/d3.mp4?v=release-20261016-topdown17', summary: '随机树林 · 绕行抵达可见棋盘目标' },
-  D4: { name: '多模态任务', model: 'ConnectomeFlight-M-VO', frames: 408, media: './media/d4.mp4?v=release-20261016-topdown17', summary: '视觉与嗅觉导航 · 选定成功案例' },
+  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-V · T4/T5 · 115 参数', frames: 197, media: './media/d3.mp4?v=vis115-20261024', summary: '树林 v3 · 绕行抵达球形目标' },
+  D4: { name: '多模态任务', model: 'ConnectomeFlight-M-VO', frames: 408, media: './media/d4.mp4?v=vis115-20261024', summary: '视觉与嗅觉导航 · 选定成功案例' },
 };
 const CROPS = {follow:[0,0,1280,720],topdown:[1280,0,1280,720]};
 const modelNetwork = new ModelNetwork();
@@ -113,6 +113,9 @@ async function loadScene(key) {
   byId('loading').textContent='正在加载同步展示…';byId('loading').classList.remove('hidden');
   document.body.classList.toggle('multimodal',key==='D4');byId('odor-card').hidden=key!=='D4';
   document.querySelector('.model-tag').textContent=task().model;
+  byId('task-model-note').textContent=key==='D4'
+    ? '多模态任务展示 ConnectomeFlight-M-VO 的一个成功案例：视觉编码与触角气味记忆融合产生动作。'
+    : '纯视觉任务使用 115 参数的 ConnectomeFlight-V（T4/T5，update800）。双眼 144 维特征经固定归一化与 104 维压缩，再经两个标量读出层、50 ms EMA 记忆和动作头，在疏朗树林 v3 中绕行抵达直径 1.8 cm 的球形目标。';
   document.querySelector('.column-heading h1').lastChild.textContent=key==='D4'?'视嗅输入':'视觉输入';
   document.querySelector('.column-heading > span').textContent=key==='D4'?'双眼 + 触角':'左眼 / 右眼';
   document.querySelector('.eye-card .card-tag').textContent=key==='D4'?'64 × 64':'32 × 32';
@@ -128,7 +131,7 @@ async function loadScene(key) {
     });
     video.src=task().media;video.load();
     const [scene]=await Promise.all([
-      fetch(`./media/${key.toLowerCase()}-display.json?v=release-20261016-topdown17`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
+      fetch(`./media/${key.toLowerCase()}-display.json?v=vis115-20261024`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
       mediaReady,key==='D4'?odorField.load():Promise.resolve(),
     ]);
     if(generation!==state.generation)return;
@@ -243,6 +246,7 @@ function drawTrajectory() {
   const points = state.scene.positionsXYZCm;
   const obstacles = state.scene.obstaclePositionsXYCm;
   const source = state.scene.sourcePositionXYCm;
+  const sphere = state.scene.goalSphereRadiusCm;
   const marker = state.scene.goalMarkerSegmentXYCm;
   const markerPoint = fraction => marker[0].map((v, axis) => v + (marker[1][axis] - v) * (fraction + .5));
   const markerEnds = marker ? [markerPoint(-.5), markerPoint(.5)] : [];
@@ -291,6 +295,9 @@ function drawTrajectory() {
     ctx.beginPath(); ctx.arc(gx, gy, 5, 0, Math.PI * 2); ctx.stroke();
   });
   const [tx, ty] = project(source);
+  if (sphere) {
+    ctx.fillStyle = '#e6d499'; ctx.beginPath(); ctx.arc(tx, ty, sphere * scale, 0, Math.PI * 2); ctx.fill();
+  }
   if (marker) {
     for (let column = 0; column < 3; column++) {
       const a = project(markerPoint(column / 3 - .5));
@@ -304,7 +311,7 @@ function drawTrajectory() {
   ctx.beginPath(); ctx.moveTo(tx - 12, ty); ctx.lineTo(tx - 8, ty); ctx.moveTo(tx + 8, ty); ctx.lineTo(tx + 12, ty); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(tx, ty - 12); ctx.lineTo(tx, ty - 8); ctx.moveTo(tx, ty + 8); ctx.lineTo(tx, ty + 12); ctx.stroke();
   ctx.fillStyle = '#dfbb83'; ctx.font = '600 10px -apple-system, sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText(state.scene.odorFeatures ? '气味源' : marker ? '棋盘目标' : '目标', tx, ty + 25);
+  ctx.fillText(state.scene.odorFeatures ? '气味源' : sphere ? '球形目标' : marker ? '棋盘目标' : '目标', tx, ty + 25);
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   ctx.strokeStyle = '#617b84'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 5]);
   ctx.beginPath(); points.forEach((p, i) => { const [x, y] = project(p); if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.setLineDash([]);

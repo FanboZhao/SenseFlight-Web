@@ -21,7 +21,17 @@ const COMPACT_LABELS = {
   eyes: ['双眼画面', 'RGB'], vision: ['视觉网络', 'FlyVis'], pooled: ['运动特征', '144维'],
   readout: ['特征整合', '80维'], latent: ['视觉编码', '32维'], control: ['动作控制', '32维'],
   actions: ['飞行动作', '3项'],
+  compressed: ['固定压缩', '104维'], memory: ['时序记忆', '50 ms'],
 };
+const VIS115_STAGES = [
+  STAGES[0], STAGES[1], { ...STAGES[2], x:.46 },
+  { id:'compressed', x:.56, name:'固定压缩', detail:'104 · z-score + pooling' },
+  { id:'readout', x:.65, name:'视觉读出', detail:'1 · ReLU' },
+  { id:'latent', x:.725, name:'视觉编码', detail:'1 · ReLU' },
+  { id:'memory', x:.80, name:'时序记忆', detail:'1 · EMA 50 ms' },
+  { id:'control', x:.87, name:'动作控制', detail:'1 · tanh' },
+  { ...STAGES[6], x:.955 },
+];
 // Fit the explanatory projection to both dimensions; display nodes retain their original placement.
 const projectionScale = (width, height, overview = false) => Math.min(Math.max(0, height - 54) / 360, width / (overview ? 650 : 1100), 1.4);
 
@@ -41,7 +51,7 @@ export class ModelNetwork {
     if (topology.format !== 'rendered-rgba-v1') throw new Error('模型活动版本不匹配');
     this.topology = topology;
     this.multimodal = topology.layers.some(l => l.id === 'odorMemory');
-    const stages = STAGES.map(stage => {
+    const stages = (topology.layers.some(l => l.id === 'memory') ? VIS115_STAGES : STAGES).map(stage => {
       const layer = topology.layers.find(item => item.id === stage.id);
       return layer ? { ...stage, detail: stage.detail.replace(/^\d+/, String(layer.width)) } : stage;
     });
@@ -67,7 +77,7 @@ export class ModelNetwork {
   async loadScene(scene, taskName) {
     const loadId = ++this.loadId;
     const layout = scene.networkLayout;
-    const image = new Image(); image.src = `${layout.appearance}?v=release-20261016`;
+    const image = new Image(); image.src = `${layout.appearance}?v=vis115-20261024`;
     await image.decode();
     if (loadId !== this.loadId) return;
     if (image.width !== layout.imageWidth || image.height !== layout.imageHeight) throw new Error('展示颜色贴图尺寸不匹配');
@@ -212,7 +222,7 @@ export class ModelNetwork {
     const compact = width < 760 || height < 320;
     for (const stage of this.stages.filter(stage => stage.name)) {
       const layer = this.topology.layers.find(item => item.id === stage.id);
-      const compactLabels = [COMPACT_LABELS[stage.id][0], layer ? `${layer.width}${stage.id === 'actions' ? '项' : '维'}` : COMPACT_LABELS[stage.id][1]];
+      const compactLabels = [layer?.title || COMPACT_LABELS[stage.id][0], stage.id === 'memory' ? 'EMA 50 ms' : layer ? `${layer.width}${stage.id === 'actions' ? '项' : '维'}` : COMPACT_LABELS[stage.id][1]];
       const x = stage.x * width, labels = compact || width < 1100 ? compactLabels : [stage.name, stage.detail];
       ctx.textAlign = 'center'; ctx.fillStyle = '#dceae7'; ctx.font = `600 ${width < 640 ? 11 : 12}px -apple-system, sans-serif`;
       // Keep semantic names readable when several stages share a narrow panel.
