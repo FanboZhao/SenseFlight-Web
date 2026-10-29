@@ -9,11 +9,11 @@
   <meta name="referrer" content="no-referrer">
   <title>SenseFlight · 感官飞行观测台</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=vo2454-20261029">
-  <link rel="stylesheet" href="./model-network.css?v=vo2454-20261029">
-  <link rel="stylesheet" href="./visual-polish.css?v=vo2454-20261029">
-  <link rel="stylesheet" href="./demo.css?v=vo2454-20261029">
-  <script type="module" src="./app.js?v=vo2454-20261029"></script>
+  <link rel="stylesheet" href="./style.css?v=network-polish-20261029">
+  <link rel="stylesheet" href="./model-network.css?v=network-polish-20261029">
+  <link rel="stylesheet" href="./visual-polish.css?v=network-polish-20261029">
+  <link rel="stylesheet" href="./demo.css?v=network-polish-20261029">
+  <script type="module" src="./app.js?v=network-polish-20261029"></script>
 </head>
 <body>
   <header class="topbar">
@@ -93,7 +93,7 @@
     </aside>
 
     <section id="model-network" class="model-network-card" aria-labelledby="network-title">
-      <div class="network-heading"><h2 id="network-title"><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 8 3-4m-3 4 3 4m2-8 3 3m-3 5 3-3"></path><circle cx="2.5" cy="8" r="1.5"></circle><circle cx="8" cy="2.5" r="1.5"></circle><circle cx="8" cy="13.5" r="1.5"></circle><circle cx="13.5" cy="8" r="1.5"></circle></svg>模型活动</h2><div class="network-heading-actions"><button id="cell-types-open" class="quiet-button" type="button" aria-haspopup="dialog">细胞类型</button><button id="network-expand" type="button" disabled><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4"></path></svg>放大</button></div></div>
+      <div class="network-heading"><h2 id="network-title"><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 8 3-4m-3 4 3 4m2-8 3 3m-3 5 3-3"></path><circle cx="2.5" cy="8" r="1.5"></circle><circle cx="8" cy="2.5" r="1.5"></circle><circle cx="8" cy="13.5" r="1.5"></circle><circle cx="13.5" cy="8" r="1.5"></circle></svg>模型活动</h2><span class="network-flow-note">视觉<span class="flow-odor"> × 嗅觉</span> → 动作</span><div class="network-heading-actions"><button id="cell-types-open" class="quiet-button" type="button" aria-haspopup="dialog">细胞类型</button><button id="network-expand" type="button" disabled><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4"></path></svg>放大</button></div></div>
       <div class="network-canvas-shell"><canvas id="network-canvas" title="悬停查看类型，拖动调整视觉网络视角" aria-label="同帧模型活动展示；悬停查看类型，拖动调整视角"></canvas><div id="network-load" class="network-load" role="status">正在加载真实模型活动…</div><p id="network-inspector" class="network-inspector">悬停查看类型 · 拖动调整视角</p></div>
       <div class="network-legend"><span class="network-color-scale"><i></i>负 ← 0 → 正</span><span class="network-help">悬停查看 · 拖动旋转</span><span id="network-sync">等待播放</span></div>
     </section>

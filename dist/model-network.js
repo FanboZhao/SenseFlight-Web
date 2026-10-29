@@ -227,7 +227,151 @@ export class ModelNetwork {
     byId('cell-types-open').textContent = this.cellType >= 0 ? this.topology.cellTypes[this.cellType].name : '细胞类型';
   }
 
+  residualEdges() { return this.topology.edges.map(([source,target],index)=>({source,target,index})); }
+  residualNodeAlpha(node,index) { return this.hasActivity ? this.data.pixels[this.pixelOffset(index)+3]/255 : node.stage==='vision'?.30:.6; }
+  residualNodeColor(node,index) { return this.hasActivity ? this.colorAt(index) : COLORS[128]; }
+  residualEdgeAppearance(edge) {
+    const index=this.nodes.length+edge.index;
+    const alpha=this.hasActivity?this.data.pixels[this.pixelOffset(index)+3]/255:.035;
+    return {strength:clamp((alpha-.035)/.30,0,1),color:this.hasActivity?this.colorAt(index):'#b0deb0'};
+  }
+
+  residualLayout(canvas, width, height) {
+    const compact = canvas === this.small;
+    const anchors = {pooled:.34, compressed:.435, readout:.515, latent:.58, memory:.66,
+      control:.74, baseLogits:.82, odorInput:.35, odorMemory:.47, residualHidden:.66,
+      residualLogits:.82, logits:.895, actions:.966};
+    return {compact, anchors, upper:height*(compact?.295:.29), lower:height*(compact?.72:.72),
+      visualScale:Math.min(width*(compact?.00058:.0007),height*(compact?.00145:.0014),.9),
+      eyeX:width*.055, visionX:width*.18, eyeY:[height*.30,height*.72]};
+  }
+
+  projectResidual(canvas, width, height) {
+    const l = this.residualLayout(canvas,width,height);
+    const key = `residual/${width}/${height}/${l.compact}/${this.yaw}/${this.pitch}`;
+    const cached = this.projectionCache?.get(canvas);
+    if (cached?.key === key) return cached.points;
+    const points = new Float32Array(this.nodes.length*2);
+    const cy=Math.cos(this.yaw),sy=Math.sin(this.yaw),cp=Math.cos(this.pitch),sp=Math.sin(this.pitch);
+    this.nodes.forEach((node,i)=>{
+      let x,y;
+      if(node.stage==='vision') {
+        const rx=node.dx*cy+node.dz*sy,rz=-node.dx*sy+node.dz*cy;
+        x=l.visionX+rx*l.visualScale;y=l.eyeY[node.eye]+(node.dy*cp-rz*sp)*l.visualScale;
+      } else {
+        const stage=node.stage, unit=node.unit;
+        x=(l.anchors[stage]??.6)*width;
+        y=['odorInput','odorMemory','residualHidden','residualLogits'].includes(stage)?l.lower:l.upper;
+        if(['pooled','compressed','odorMemory','residualHidden'].includes(stage)) {
+          const n=this.topology.layers.find(layer=>layer.id===stage).width;
+          const cols=stage==='pooled'?12:stage==='compressed'?8:4,rows=Math.ceil(n/cols);
+          const gridW=Math.min(width*(stage==='pooled'?.072:stage==='compressed'?.052:.038),l.compact?44:66);
+          const gridH=Math.min(height*(l.compact?.16:.23),l.compact?44:94);
+          x+=((unit%cols)/(cols-1)-.5)*gridW;
+          y+=(Math.floor(unit/cols)/(rows-1)-.5)*gridH;
+        } else if(stage==='odorInput') y+=(unit-.5)*Math.min(16,height*.06);
+        else if(['baseLogits','residualLogits'].includes(stage)) y+=(unit-1)*Math.min(height*.055,28);
+        else if(stage==='logits') y=height*.505+(unit-1)*Math.min(height*.105,52);
+        else if(stage==='actions') y=height*.505+(unit-1)*Math.min(height*.105,52);
+      }
+      points[i*2]=x;points[i*2+1]=y;
+    });
+    this.projected.set(canvas,points);
+    if(!this.projectionCache)this.projectionCache=new Map();
+    this.projectionCache.set(canvas,{key,points});return points;
+  }
+
+  drawResidual(canvas) {
+    if(!this.topology||canvas.clientWidth<2)return;
+    const w=canvas.clientWidth,h=canvas.clientHeight,dpr=Math.min(window.devicePixelRatio||1,2);
+    if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
+    const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+    const layout=this.residualLayout(canvas,w,h),compact=layout.compact,p=this.projectResidual(canvas,w,h);
+    ctx.fillStyle='#0b141b';ctx.fillRect(0,0,w,h);
+    const box=(x,y,width,height,fill,stroke,r=8)=>{ctx.beginPath();ctx.roundRect(x,y,width,height,r);ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=.7;ctx.stroke();}};
+    box(8,8,w*.265-12,h-16,'#0e1b2380','#b4d5d810');
+    box(w*.285,8,w*.565,h*.46-10,'#10221f6e','#a5d9bd1b');
+    box(w*.285,h*.53,w*.565,h*.44-4,'#201d2b63','#c6b9dd1a');
+    const text=(value,x,y,size=11,color='#c8d9d6',align='center')=>{ctx.textAlign=align;ctx.font=`${size}px -apple-system, sans-serif`;ctx.fillStyle=color;ctx.fillText(value,x,y);};
+    text('双眼 · FlyVis',w*.14,compact?23:30,compact?10:13,'#b9d5cf');
+    if(compact){
+      const fs=w<520?10:11;
+      text('视觉编码',w*.44,25,fs);text('视觉记忆',w*.66,25,fs);text('基础动作',w*.79,25,fs);
+      text('嗅觉记忆',w*.42,h*.53+18,fs,'#cbbfdf');text('残差修正',w*.71,h*.53+18,fs,'#cbbfdf');
+      text('动作',w*.935,25,fs);
+      text('144 → 104 → 1 → 1',w*.44,h*.46-9,w<520?8:9,'#789e94');
+      text('EMA · 50 ms',w*.66,h*.46-9,w<520?8:9,'#9cc5af');
+      text('1 → 3',w*.79,h*.46-9,9,'#789e94');
+      text('2 → 32 · RNN',w*.42,h*.97-12,w<520?8:9,'#a899bc');
+      text('33 → 32 → 3',w*.71,h*.97-12,w<520?8:9,'#a899bc');
+      text('＋ → tanh',w*.93,h*.85,9,'#96aaa8');
+    }else{
+      text('视觉通路',w*.30,29,12,'#b8dacb','left');text('嗅觉与残差',w*.30,h*.53+26,12,'#cbbfdf','left');
+      for(const stage of this.stages.filter(s=>layout.anchors[s.id]!==undefined&& !['logits','actions'].includes(s.id))){
+        const lower=['odorInput','odorMemory','residualHidden','residualLogits'].includes(stage.id),x=layout.anchors[stage.id]*w;
+        text(stage.name,x,h*(lower?.62:.16),11,lower?'#cbbfdf':'#bfd7cd');
+        text(stage.id==='memory'?'1 · EMA 50 ms':stage.detail,x,h*(lower?.92:.435),10,lower?'#9a8dab':'#7d9e91');
+      }
+      text('动作合成',w*.93,29,12,'#cdd8cf');text('逐项相加',w*.895,h*.22,11,'#a4b7af');text('tanh',w*.966,h*.22,11,'#a4b7af');
+    }
+    // Matrix backplates follow the individual nodes; they do not aggregate values.
+    for(const id of ['pooled','compressed','odorMemory','residualHidden']){
+      const indices=this.nodes.flatMap((node,i)=>node.stage===id?[i]:[]);
+      const xs=indices.map(i=>p[i*2]),ys=indices.map(i=>p[i*2+1]);
+      const minX=Math.min(...xs)-5,minY=Math.min(...ys)-5;
+      box(minX,minY,Math.max(...xs)-minX+5,Math.max(...ys)-minY+5,'#0b141b65',id.startsWith('odor')||id==='residualHidden'?'#bba8d518':'#a6d1b51c',5);
+    }
+    // Eye frames and visual-network silhouettes are structural decoration only.
+    for(let eye=0;eye<2;eye++){
+      const x=layout.visionX,y=layout.eyeY[eye],r=82*layout.visualScale;
+      ctx.beginPath();ctx.ellipse(x,y,r,r*.92,-.18,0,Math.PI*2);ctx.strokeStyle='#b3d5c322';ctx.lineWidth=.8;ctx.stroke();
+      const size=Math.min(w*.075,h*.15,compact?40:64);
+      box(layout.eyeX-size/2-3,y-size/2-3,size+6,size+6,'#0b141b','#91b5a73a',4);
+      if(this.eyeCanvas?.[eye]&&this.data){ctx.imageSmoothingEnabled=false;ctx.drawImage(this.eyeCanvas[eye],layout.eyeX-size/2,y-size/2,size,size);ctx.imageSmoothingEnabled=true;}
+      text(eye?'R':'L',layout.eyeX,y+size/2+16,9,'#829c98');
+      ctx.strokeStyle='#9fc6b82d';ctx.lineWidth=.7;ctx.setLineDash([2,5]);ctx.beginPath();ctx.moveTo(layout.eyeX+size/2+6,y);ctx.lineTo(x-r-5,y);ctx.stroke();ctx.setLineDash([]);
+    }
+    if(this.data)for(const edge of this.residualEdges())this.drawResidualEdge(ctx,p,edge,w,h,compact);
+    const hover=this.hover?.canvas===canvas?this.hover.index:-1;
+    this.nodes.forEach((node,i)=>{
+      const vision=node.stage==='vision',norm=this.normalized(node),focused=this.cellType<0||!vision||node.type===this.cellType;
+      const x=p[i*2],y=p[i*2+1];
+      let alpha=this.residualNodeAlpha(node,i);
+      alpha*=vision?(this.cellType>=0&&focused?.85:compact?.30:.48):1;
+      if(!focused)alpha*=.12;
+      ctx.globalAlpha=alpha;ctx.fillStyle=this.residualNodeColor(node,i);
+      if(vision){const size=compact?.7:.9;ctx.fillRect(x-size/2,y-size/2,size,size);return;}
+      const matrix=['pooled','compressed','odorMemory','residualHidden'].includes(node.stage);
+      const radius=matrix?(compact?(w<520?1:1.45):2):node.stage==='actions'?(compact?4.2:5.5):node.stage==='memory'?(compact?4:5):compact?2.5:3.5;
+      ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.fill();
+      if(!matrix){ctx.globalAlpha=.7;ctx.strokeStyle=node.stage==='memory'?'#bfe5ca80':'#a8c6bb32';ctx.lineWidth=.8;ctx.beginPath();ctx.arc(x,y,radius+(node.stage==='memory'?4:2),0,Math.PI*2);ctx.stroke();}
+      ctx.globalAlpha=1;
+      if(node.stage==='actions')text(['前进','转向','升降'][node.unit],x,y+(compact?16:21),compact?9:11,'#bcd0c7');
+      if(node.stage==='logits'){ctx.strokeStyle='#bfcdc6';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(x-2,y);ctx.lineTo(x+2,y);ctx.moveTo(x,y-2);ctx.lineTo(x,y+2);ctx.stroke();}
+    });ctx.globalAlpha=1;
+    if(hover>=0){ctx.strokeStyle='#f1d590';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(p[hover*2],p[hover*2+1],7,0,Math.PI*2);ctx.stroke();}
+  }
+
+  drawResidualEdge(ctx,p,edge,width,height,compact) {
+    const source=this.nodes[edge.source],target=this.nodes[edge.target];
+    const visible=this.cellType<0||(source.stage!=='vision'&&target.stage!=='vision')||source.type===this.cellType||target.type===this.cellType;
+    const hover=this.hover?.canvas===ctx.canvas?this.hover.index:-1;
+    const incident=hover>=0&&(edge.source===hover||edge.target===hover);
+    const appearance=this.residualEdgeAppearance(edge);
+    const sensory=source.stage==='vision',branch=source.stage==='memory'&&target.stage==='residualHidden';
+    let alpha=(.03+appearance.strength*.08)*(sensory?.32:branch?.20:1);
+    if(incident)alpha=.62;else if(hover>=0)alpha*=.35;
+    if(!visible)alpha*=.1;
+    ctx.globalAlpha=alpha;ctx.strokeStyle=appearance.color;ctx.lineWidth=incident?1.25:compact?.65:.8;
+    const x1=p[edge.source*2],y1=p[edge.source*2+1],x2=p[edge.target*2],y2=p[edge.target*2+1];
+    ctx.beginPath();ctx.moveTo(x1,y1);
+    if(branch){const corridor=x1+Math.min(width*.025,30);ctx.bezierCurveTo(corridor,y1+height*.14,corridor,y2-height*.14,x2,y2);}
+    else {const bend=(x2-x1)*.5;ctx.bezierCurveTo(x1+bend,y1,x2-bend,y2,x2,y2);}
+    ctx.stroke();ctx.globalAlpha=1;
+  }
+
   project(canvas, width, height) {
+    if(this.residualPolicy)return this.projectResidual(canvas,width,height);
     const cache = this.projectionCache?.get(canvas);
     const key = `${width}/${height}/${this.yaw}/${this.pitch}/${this.multimodal}`;
     if (cache?.key === key) return cache.points;
@@ -263,6 +407,7 @@ export class ModelNetwork {
   }
 
   draw(canvas) {
+    if(this.residualPolicy)return this.drawResidual(canvas);
     if (!this.topology || canvas.clientWidth < 2) return;
     const width = canvas.clientWidth, height = canvas.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
     if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) { canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); }

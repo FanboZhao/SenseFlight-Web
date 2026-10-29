@@ -184,3 +184,30 @@ dialog::backdrop { background:#030910cc; }
 .difficulty { flex-direction:column; gap:2px; }
 .difficulty small { white-space:nowrap; }
 
+
+/* Quiet canvas frame and a clearer hierarchy for the activity diagram. */
+.model-network-card { grid-template-rows:30px minmax(0,1fr) 22px; gap:6px; padding:9px 10px; background:#111c25; border-color:#8ba6b42b; box-shadow:0 8px 24px #00000016; }
+.network-heading { padding:0 2px; }
+.network-heading h2 { font-size:13px; font-weight:600; letter-spacing:.025em; }
+.network-heading .ui-icon { color:#aac7bd; opacity:.8; }
+.network-flow-note { margin-left:auto; margin-right:12px; font-size:10px; font-weight:400; letter-spacing:.05em; color:#8197a7; }
+.network-flow-note .flow-odor { display:none; }
+.multimodal .network-flow-note .flow-odor { display:inline; }
+.network-heading-actions button { border-radius:7px; background:#20303a70; border-color:#9bb4c11c; color:#bed0d9; height:26px; padding:4px 9px; }
+.network-heading-actions button:hover { color:#e4f4ee; background:#2c424d; border-color:#aac9bd55; }
+.network-heading-actions button:focus-visible { outline:2px solid #b8e8d0; outline-offset:2px; }
+.network-canvas-shell { background:#0d1720; border-color:#71899c1a; border-radius:9px; }
+.network-legend { padding:0 3px; font-size:9px; }
+.network-color-scale { color:#9aaebc; }
+.network-color-scale i { width:54px; height:3px; opacity:.9; }
+.network-help { color:#738b9b; }
+#network-sync { color:#9ab3b1; font-size:9px; }
+.network-dialog { background:#111c25; border-color:#9bb4c12e; }
+.network-dialog .dialog-head { padding:16px 18px; }
+.network-dialog .dialog-head h2 { font-size:16px; font-weight:500; }
+.network-dialog .dialog-head p { margin-top:5px; font-size:11px; color:#8da5b5; }
+.network-dialog-scroll { margin:0 12px; border:1px solid #71899c1a; border-radius:10px; background:#0d1720; }
+.multimodal .network-dialog-scroll canvas { min-width:960px; }
+.network-dialog .network-inspector { background:transparent; border-left:2px solid #9ec8b950; border-radius:0; padding:4px 10px; margin:10px 16px 0; color:#9bb2bf; }
+@media (max-width:1100px) { .network-flow-note { display:none; } }
+@media (max-width:520px) { .model-network-card { padding:9px 8px; height:400px; } .network-heading h2 { font-size:12px; } .network-dialog .dialog-head h2 { font-size:13px; } .network-dialog-scroll { margin:0 7px; } .network-color-scale i { width:30px; } }

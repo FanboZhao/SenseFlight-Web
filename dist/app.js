@@ -1,4 +1,4 @@
-import { ModelNetwork } from './model-network.js?v=vo2454-20261029';
+import { ModelNetwork } from './model-network.js?v=network-polish-20261029';
 import { OdorFieldLayer } from './odor-field.js?v=vo2454-20261029';
 const byId = id => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
