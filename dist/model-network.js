@@ -32,6 +32,51 @@ const VIS115_STAGES = [
   { id:'control', x:.87, name:'动作控制', detail:'1 · tanh' },
   { ...STAGES[6], x:.955 },
 ];
+// The Vis115 residual policy retains its visual action branch and adds a
+// separate odor-conditioned correction before the final tanh.
+const RESIDUAL_STAGES = [
+  STAGES[0], { ...STAGES[1], name:'视觉网络', detail:'FlyVis' },
+  { id:'pooled', x:.435, y:.28, name:'运动特征', detail:'144 · T4/T5' },
+  { id:'compressed', x:.535, y:.28, name:'固定压缩', detail:'104 · pooling' },
+  { id:'readout', x:.625, y:.28, name:'视觉读出', detail:'1 · ReLU' },
+  { id:'latent', x:.69, y:.28, name:'视觉编码', detail:'1 · ReLU' },
+  { id:'memory', x:.755, y:.28, name:'视觉记忆', detail:'1 · EMA 50 ms' },
+  { id:'control', x:.825, y:.28, name:'基础控制', detail:'1 · tanh' },
+  { id:'baseLogits', x:.895, y:.28, name:'基础输出', detail:'3 · linear' },
+  { id:'odorInput', x:.52, y:.74, name:'嗅觉输入', detail:'2 · normalized' },
+  { id:'odorMemory', x:.635, y:.74, name:'嗅觉记忆', detail:'32 · RNN tanh' },
+  { id:'residualHidden', x:.755, y:.74, name:'视嗅融合', detail:'32 · tanh' },
+  { id:'residualLogits', x:.835, y:.74, name:'残差修正', detail:'3 · linear' },
+  { id:'logits', x:.895, y:.74, name:'逐项相加', detail:'3 · +' },
+  { id:'actions', x:.965, y:.74, name:'飞行动作', detail:'3 · tanh' },
+];
+const residualDescription = {
+  memory:'视觉编码的因果 EMA，时间常数 50 ms',
+  control:'视觉记忆经基础动作头的标量 tanh 控制',
+  baseLogits:'视觉基础动作输出，尚未经过最终 tanh',
+  odorMemory:'包含上一时刻状态的嗅觉 RNN 记忆；跨时间连线省略',
+  residualHidden:'视觉 EMA 与嗅觉 RNN 记忆共同输入的残差隐藏层',
+  residualLogits:'嗅觉条件残差修正量，尚未经过最终 tanh',
+  logits:'基础输出与残差修正逐项相加',
+  actions:'对相加结果逐项取 tanh 后的实际飞行动作',
+};
+function drawResidualLabels(ctx, stages, width, height) {
+  const narrow = width < 760;
+  for (const stage of stages) {
+    const x = stage.x * width, lower = stage.y > .5;
+    const label = stage.name || stage.id;
+    const lines = narrow && label.length > 2 ? [label.slice(0,2), label.slice(2)] : [label];
+    const top = lower ? height * .49 : 18;
+    ctx.textAlign = 'center'; ctx.fillStyle = lower ? '#d6bcf1' : '#dceae7';
+    ctx.font = `600 ${width < 520 ? 9 : 11}px -apple-system, sans-serif`;
+    lines.forEach((line, i) => ctx.fillText(line, x, top + i * 12));
+    if (stage.id === 'eyes' || stage.id === 'vision' || stage.id === 'actions') continue;
+    ctx.fillStyle = '#99bba5'; ctx.font = `${width < 520 ? 8 : 9}px ui-monospace, monospace`;
+    const detail = stage.id === 'memory' ? '50 ms' : narrow ? stage.detail.split(' · ')[0] : stage.detail;
+    const baseline = lower ? height - 10 : ['pooled','compressed'].includes(stage.id) ? height * .46 : height * .40;
+    ctx.fillText(detail, x, baseline);
+  }
+}
 // Fit the explanatory projection to both dimensions; display nodes retain their original placement.
 const projectionScale = (width, height, overview = false) => Math.min(Math.max(0, height - 54) / 360, width / (overview ? 650 : 1100), 1.4);
 
@@ -51,12 +96,17 @@ export class ModelNetwork {
     if (topology.format !== 'rendered-rgba-v1') throw new Error('模型活动版本不匹配');
     this.topology = topology;
     this.multimodal = topology.layers.some(l => l.id === 'odorMemory');
-    const stages = (topology.layers.some(l => l.id === 'memory') ? VIS115_STAGES : STAGES).map(stage => {
+    this.residualPolicy = topology.layers.some(l => l.id === 'baseLogits');
+    const stages = (this.residualPolicy ? RESIDUAL_STAGES : topology.layers.some(l => l.id === 'memory') ? VIS115_STAGES : STAGES).map(stage => {
       const layer = topology.layers.find(item => item.id === stage.id);
       return layer ? { ...stage, detail: stage.detail.replace(/^\d+/, String(layer.width)) } : stage;
     });
-    this.stages = this.multimodal ? [...stages,
+    this.stages = this.multimodal && !this.residualPolicy ? [...stages,
       { id:'odorInput', x:.625 }, { id:'odorMemory', x:.735 }] : stages;
+    // Unknown display layers still get a finite position and inspectable label.
+    const remaining = topology.layers.filter(l => !this.stages.some(s => s.id === l.id) && l.id !== 'logits');
+    remaining.forEach((layer, index) => this.stages.push({id:layer.id, x:.5 + .4 * (index + 1)/(remaining.length + 1),
+      y:.5, name:layer.title || layer.id, detail:`${layer.width}`}));
     this.projectionCache = new Map(); this.hover = null; this.cellType = -1; this.focus = 'all';
     byId('network-population').textContent = `${(topology.fullNodesPerEye * 2).toLocaleString()} 个视觉单元 · 显示 ${(topology.sampledNodesPerEye * 2).toLocaleString()} 个 · ${topology.cellTypes.length} 类细胞`;
     byId('network-sampling').textContent = '节点使用量化后的显示颜色；图形布局与交互保留，精确活动数值不公开。';
@@ -77,7 +127,7 @@ export class ModelNetwork {
   async loadScene(scene, taskName) {
     const loadId = ++this.loadId;
     const layout = scene.networkLayout;
-    const image = new Image(); image.src = `${layout.appearance}?v=vis115-20261024`;
+    const image = new Image(); image.src = `${layout.appearance}?v=visolf2454-20261029`;
     await image.decode();
     if (loadId !== this.loadId) return;
     if (image.width !== layout.imageWidth || image.height !== layout.imageHeight) throw new Error('展示颜色贴图尺寸不匹配');
@@ -169,7 +219,7 @@ export class ModelNetwork {
     }
     if (this.hover && this.data) this.showInspection(this.inspect(this.nodes[this.hover.index]));
     else if(this.cellType>=0) this.showInspection(`${this.topology.cellTypes[this.cellType].name} · 拖动调整视角 · 显示颜色已量化`);
-    else this.showInspection(this.multimodal ? '上路：视觉编码 · 下路：嗅觉记忆 · 拖动调整视角' : '悬停查看类型 · 拖动调整视角');
+    else this.showInspection(this.residualPolicy ? '上路：视觉基础动作 · 下路：视嗅残差修正 · 相加后经 tanh 产生动作' : this.multimodal ? '上路：视觉编码 · 下路：嗅觉记忆 · 拖动调整视角' : '悬停查看类型 · 拖动调整视角');
   }
 
   updateFocusButtons() {
@@ -200,6 +250,12 @@ export class ModelNetwork {
         points[i * 2 + 1] = height * (lower ? .76 : .34) + y * policyY * .43;
       }
       if (node.stage === 'actions') points[i * 2 + 1] = center + node.dy * Math.min(height / 340, 1.4);
+      if (this.residualPolicy && node.stage !== 'vision') {
+        const stage = this.stages.find(s => s.id === node.stage);
+        const vertical = node.stage === 'actions' ? Math.min(height / 700, .7) : Math.min(height / 640, .65);
+        points[i * 2] = anchors[node.stage] + x * Math.min(width / 1050, 1.1);
+        points[i * 2 + 1] = height * (stage.y ?? .5) + node.dy * vertical;
+      }
     });
     this.projected.set(canvas, points);
     if (!this.projectionCache) this.projectionCache = new Map();
@@ -220,9 +276,11 @@ export class ModelNetwork {
       ctx.strokeStyle = '#afcbd012'; ctx.beginPath(); ctx.moveTo(stage.x * width - bandWidth / 2, 43); ctx.lineTo(stage.x * width - bandWidth / 2, height - 33); ctx.stroke();
     }
     const compact = width < 760 || height < 320;
+    if (this.residualPolicy) drawResidualLabels(ctx, this.stages, width, height);
+    else {
     for (const stage of this.stages.filter(stage => stage.name)) {
       const layer = this.topology.layers.find(item => item.id === stage.id);
-      const compactLabels = [layer?.title || COMPACT_LABELS[stage.id][0], stage.id === 'memory' ? 'EMA 50 ms' : layer ? `${layer.width}${stage.id === 'actions' ? '项' : '维'}` : COMPACT_LABELS[stage.id][1]];
+      const compactLabels = [layer?.title || COMPACT_LABELS[stage.id]?.[0] || stage.name, stage.id === 'memory' ? 'EMA 50 ms' : layer ? `${layer.width}${stage.id === 'actions' ? '项' : '维'}` : COMPACT_LABELS[stage.id]?.[1] || stage.detail];
       const x = stage.x * width, labels = compact || width < 1100 ? compactLabels : [stage.name, stage.detail];
       ctx.textAlign = 'center'; ctx.fillStyle = '#dceae7'; ctx.font = `600 ${width < 640 ? 11 : 12}px -apple-system, sans-serif`;
       // Keep semantic names readable when several stages share a narrow panel.
@@ -242,6 +300,7 @@ export class ModelNetwork {
       }
       ctx.fillStyle = '#99aebb'; ctx.font = '9px -apple-system, sans-serif';
       ctx.fillText('2维 → 32维 · tanh', width * .68, height - 30);
+    }
     }
     const overview = canvas === this.small;
     const p = this.project(canvas, width, height), s = projectionScale(width, height, overview), center = height * .51;
@@ -272,8 +331,8 @@ export class ModelNetwork {
       else ctx.fillRect(x - size / 2, y - size / 2, size, size);
       if (node.stage === 'actions') {
         ctx.globalAlpha = 1; ctx.textAlign = 'center'; ctx.fillStyle = '#e7edda'; ctx.font = `600 ${compact ? 10 : 12}px -apple-system, sans-serif`;
-        ctx.fillText(['前进', '转向', '升降'][node.unit], x, y + (compact ? 16 : 25));
-        if (!compact) {
+        ctx.fillText(['前进', '转向', '升降'][node.unit], x, y + (compact || this.residualPolicy ? 16 : 25));
+        if (!compact && !this.residualPolicy) {
           ctx.fillStyle = '#e9d395'; ctx.font = '700 12px ui-monospace,monospace'; ctx.fillText(this.hasActivity ? this.value(node).toFixed(3) : '—', x, y + 43);
         }
       }
@@ -301,7 +360,7 @@ export class ModelNetwork {
     if (!this.hasActivity) return '点击播放或拖动时间轴后查看活动画面。';
     if (node.stage==='vision') return `${node.eye?'右':'左'}眼 ${this.topology.cellTypes[node.type].name} · 节点 ${node.original} · (u,v)=(${node.u},${node.v}) · 显示颜色已量化`;
     const layer=this.topology.layers.find(l=>l.id===node.stage);
-    return `${layer.title} · 单元 ${node.unit} · 显示颜色已量化`;
+    return `${layer.title} · 单元 ${node.unit}${this.residualPolicy && residualDescription[node.stage] ? ` · ${residualDescription[node.stage]}` : ''} · 显示颜色已量化`;
   }
 
   showInspection(text) {

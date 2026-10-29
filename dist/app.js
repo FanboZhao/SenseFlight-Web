@@ -1,10 +1,10 @@
-import { ModelNetwork } from './model-network.js?v=vis115-20261024';
-import { OdorFieldLayer } from './odor-field.js?v=vis115-20261024';
+import { ModelNetwork } from './model-network.js?v=vo2454-20261029';
+import { OdorFieldLayer } from './odor-field.js?v=vo2454-20261029';
 const byId = id => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TASKS = {
-  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-V · T4/T5 · 115 参数', frames: 197, media: './media/d3.mp4?v=vis115-20261024', summary: '树林 v3 · 绕行抵达球形目标' },
-  D4: { name: '多模态任务', model: 'ConnectomeFlight-M-VO', frames: 408, media: './media/d4.mp4?v=vis115-20261024', summary: '视觉与嗅觉导航 · 选定成功案例' },
+  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-V · T4/T5 · 115 参数', frames: 197, media: './media/d3.mp4?v=vo2454-20261029', summary: '树林 v3 · 绕行抵达球形目标' },
+  D4: { name: '多模态任务', model: 'ConnectomeFlight-VO · Vis115 · 2454 参数', frames: 404, media: './media/d4.mp4?v=vo2454-20261029', summary: 'Vis115 + 嗅觉残差 · 选定成功案例' },
 };
 const CROPS = {follow:[0,0,1280,720],topdown:[1280,0,1280,720]};
 const modelNetwork = new ModelNetwork();
@@ -114,7 +114,7 @@ async function loadScene(key) {
   document.body.classList.toggle('multimodal',key==='D4');byId('odor-card').hidden=key!=='D4';
   document.querySelector('.model-tag').textContent=task().model;
   byId('task-model-note').textContent=key==='D4'
-    ? '多模态任务展示 ConnectomeFlight-M-VO 的一个成功案例：视觉编码与触角气味记忆融合产生动作。'
+    ? '多模态任务使用当前选定的 ConnectomeFlight-VO：2454 参数、update28800。完整 Vis115 分支经固定压缩和 50 ms EMA 产生视觉基准；触角气味经 32 维 RNN，与视觉记忆融合形成残差。两路相加后经 tanh 控制飞行。这里展示一个成功案例。'
     : '纯视觉任务使用 115 参数的 ConnectomeFlight-V（T4/T5，update800）。双眼 144 维特征经固定归一化与 104 维压缩，再经两个标量读出层、50 ms EMA 记忆和动作头，在疏朗树林 v3 中绕行抵达直径 1.8 cm 的球形目标。';
   document.querySelector('.column-heading h1').lastChild.textContent=key==='D4'?'视嗅输入':'视觉输入';
   document.querySelector('.column-heading > span').textContent=key==='D4'?'双眼 + 触角':'左眼 / 右眼';
@@ -131,7 +131,7 @@ async function loadScene(key) {
     });
     video.src=task().media;video.load();
     const [scene]=await Promise.all([
-      fetch(`./media/${key.toLowerCase()}-display.json?v=vis115-20261024`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
+      fetch(`./media/${key.toLowerCase()}-display.json?v=vo2454-20261029`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
       mediaReady,key==='D4'?odorField.load():Promise.resolve(),
     ]);
     if(generation!==state.generation)return;

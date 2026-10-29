@@ -52,7 +52,7 @@ jobs:
           common = {'format','difficulty','frames','stepDtSeconds','hexUV','positionsXYZCm','distanceCm',
                     'actions','topdownMarkerXY','obstaclePositionsXYCm','obstacleRadiiCm','sourcePositionXYCm','sensorOffsets','networkLayout'}
           optional = {'goalPositionsXYCm','activeGoal','odorConcentrations','odorFeatures'}
-          for task, frames in [('d3',197),('d4',408)]:
+          for task, frames in [('d3',197),('d4',404)]:
               scene = json.loads(pathlib.Path(f'dist/media/{task}-display.json').read_text())
               assert set(scene) == common | (optional if task == 'd4' else {'goalSphereRadiusCm'})
               assert scene['format'] == 'presentation-v2' and scene['frames'] == frames
@@ -70,6 +70,11 @@ jobs:
                   assert [l['width'] for l in layout['layers']] == [144,104,1,1,1,1,3]
                   assert scene['goalSphereRadiusCm'] == 0.9
                   assert [l['id'] for l in layout['layers']] == ['pooled','compressed','readout','latent','memory','control','actions']
+              if task == 'd4':
+                  assert scene['activeGoal'] == 0 and len(scene['goalPositionsXYCm']) == 4
+                  assert len(scene['odorConcentrations']) == len(scene['odorFeatures']) == frames
+                  assert [l['id'] for l in layout['layers']] == ['pooled','compressed','readout','latent','memory','control','baseLogits','odorInput','odorMemory','residualHidden','residualLogits','logits','actions']
+                  assert [l['width'] for l in layout['layers']] == [144,104,1,1,1,1,3,2,32,32,3,3,3]
               assert all(len(n)==9 and isinstance(n[0],str) for n in layout['nodes'])
               assert all(len(e)==2 and all(isinstance(i,int) and 0<=i<len(layout['nodes']) for i in e) for e in layout['edges'])
               assert set(scene['sensorOffsets']) == {'hexVisual','hexActivity','eyes','eyeSize'}
