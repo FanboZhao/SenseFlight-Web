@@ -95,6 +95,7 @@ export class ModelNetwork {
   applyTopology(topology) {
     if (topology.format !== 'rendered-rgba-v1') throw new Error('模型活动版本不匹配');
     this.topology = topology;
+    this.layerById = new Map(topology.layers.map(layer => [layer.id, layer]));
     this.multimodal = topology.layers.some(l => l.id === 'odorMemory');
     this.residualPolicy = topology.layers.some(l => l.id === 'baseLogits');
     const stages = (this.residualPolicy ? RESIDUAL_STAGES : topology.layers.some(l => l.id === 'memory') ? VIS115_STAGES : STAGES).map(stage => {
@@ -146,6 +147,9 @@ export class ModelNetwork {
 
   buildNodes() {
     this.nodes = this.topology.nodes.map(([stage,eye,type,unit,u,v,dx,dy,dz], index) => ({stage,eye,type,unit,original:unit,u,v,dx,dy,dz,index}));
+    this.layerNodes = new Map(this.topology.layers.map(layer => [layer.id, []]));
+    this.nodes.forEach((node, index) => this.layerNodes.get(node.stage)?.push(index));
+    this.residualEdgeCache = this.topology.edges.map(([source,target],index)=>({source,target,index}));
     this.visionCount = this.topology.sampledNodesPerEye * 2;
     this.needsDraw = true;
   }
@@ -227,7 +231,7 @@ export class ModelNetwork {
     byId('cell-types-open').textContent = this.cellType >= 0 ? this.topology.cellTypes[this.cellType].name : '细胞类型';
   }
 
-  residualEdges() { return this.topology.edges.map(([source,target],index)=>({source,target,index})); }
+  residualEdges() { return this.residualEdgeCache; }
   residualNodeAlpha(node,index) { return this.hasActivity ? this.data.pixels[this.pixelOffset(index)+3]/255 : node.stage==='vision'?.30:.6; }
   residualNodeColor(node,index) { return this.hasActivity ? this.colorAt(index) : COLORS[128]; }
   residualEdgeAppearance(edge) {
@@ -263,7 +267,7 @@ export class ModelNetwork {
         x=(l.anchors[stage]??.6)*width;
         y=['odorInput','odorMemory','residualHidden','residualLogits'].includes(stage)?l.lower:l.upper;
         if(['pooled','compressed','odorMemory','residualHidden'].includes(stage)) {
-          const n=this.topology.layers.find(layer=>layer.id===stage).width;
+          const n=this.layerById.get(stage).width;
           const cols=stage==='pooled'?12:stage==='compressed'?8:4,rows=Math.ceil(n/cols);
           const gridW=Math.min(width*(stage==='pooled'?.072:stage==='compressed'?.052:.038),l.compact?44:66);
           const gridH=Math.min(height*(l.compact?.16:.23),l.compact?44:94);
@@ -278,7 +282,14 @@ export class ModelNetwork {
     });
     this.projected.set(canvas,points);
     if(!this.projectionCache)this.projectionCache=new Map();
-    this.projectionCache.set(canvas,{key,points});return points;
+    const bounds=[];
+    for(const id of ['pooled','compressed','odorMemory','residualHidden']) {
+      const indices=this.layerNodes.get(id);if(!indices?.length)continue;
+      const xs=indices.map(i=>points[i*2]),ys=indices.map(i=>points[i*2+1]);
+      const x=Math.min(...xs)-5,y=Math.min(...ys)-5;
+      bounds.push({id,x,y,width:Math.max(...xs)-x+5,height:Math.max(...ys)-y+5});
+    }
+    this.projectionCache.set(canvas,{key,points,bounds});return points;
   }
 
   drawResidual(canvas) {
@@ -295,7 +306,7 @@ export class ModelNetwork {
     const text=(value,x,y,size=11,color='#c8d9d6',align='center')=>{ctx.textAlign=align;ctx.font=`${size}px -apple-system, sans-serif`;ctx.fillStyle=color;ctx.fillText(value,x,y);};
     text('双眼 · FlyVis',w*.14,compact?23:30,compact?10:13,'#b9d5cf');
     if(compact){
-      const fs=w<520?10:11;
+      const fs=w<380?9:w<520?10:11;
       text('视觉编码',w*.44,25,fs);text('视觉记忆',w*.66,25,fs);text('基础动作',w*.79,25,fs);
       text('嗅觉记忆',w*.42,h*.53+18,fs,'#cbbfdf');text('残差修正',w*.71,h*.53+18,fs,'#cbbfdf');
       text('动作',w*.935,25,fs);
@@ -315,11 +326,8 @@ export class ModelNetwork {
       text('动作合成',w*.93,29,12,'#cdd8cf');text('逐项相加',w*.895,h*.22,11,'#a4b7af');text('tanh',w*.966,h*.22,11,'#a4b7af');
     }
     // Matrix backplates follow the individual nodes; they do not aggregate values.
-    for(const id of ['pooled','compressed','odorMemory','residualHidden']){
-      const indices=this.nodes.flatMap((node,i)=>node.stage===id?[i]:[]);
-      const xs=indices.map(i=>p[i*2]),ys=indices.map(i=>p[i*2+1]);
-      const minX=Math.min(...xs)-5,minY=Math.min(...ys)-5;
-      box(minX,minY,Math.max(...xs)-minX+5,Math.max(...ys)-minY+5,'#0b141b65',id.startsWith('odor')||id==='residualHidden'?'#bba8d518':'#a6d1b51c',5);
+    for(const {id,x,y,width,height} of this.projectionCache.get(canvas).bounds){
+      box(x,y,width,height,'#0b141b65',id.startsWith('odor')||id==='residualHidden'?'#bba8d518':'#a6d1b51c',5);
     }
     // Eye frames and visual-network silhouettes are structural decoration only.
     for(let eye=0;eye<2;eye++){
@@ -334,7 +342,7 @@ export class ModelNetwork {
     if(this.data)for(const edge of this.residualEdges())this.drawResidualEdge(ctx,p,edge,w,h,compact);
     const hover=this.hover?.canvas===canvas?this.hover.index:-1;
     this.nodes.forEach((node,i)=>{
-      const vision=node.stage==='vision',norm=this.normalized(node),focused=this.cellType<0||!vision||node.type===this.cellType;
+      const vision=node.stage==='vision',focused=this.cellType<0||!vision||node.type===this.cellType;
       const x=p[i*2],y=p[i*2+1];
       let alpha=this.residualNodeAlpha(node,i);
       alpha*=vision?(this.cellType>=0&&focused?.85:compact?.30:.48):1;
@@ -515,7 +523,18 @@ export class ModelNetwork {
   }
 
   bindCanvas(canvas) {
-    canvas.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') return; canvas.setPointerCapture(e.pointerId); this.drag = { canvas, id: e.pointerId, x: e.clientX, y: e.clientY }; });
+    canvas.addEventListener('keydown', event => {
+      if (event.target !== canvas || event.altKey || event.ctrlKey || event.metaKey
+          || !['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home'].includes(event.key)) return;
+      event.preventDefault(); event.stopPropagation();
+      if (!this.topology) return;
+      const step = event.shiftKey ? 3 : 1;
+      if (event.key === 'Home') { this.yaw = -.22; this.pitch = .10; }
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') this.yaw = clamp(this.yaw + (event.key === 'ArrowLeft' ? -1 : 1) * .06 * step, -.8, .8);
+      else this.pitch = clamp(this.pitch + (event.key === 'ArrowUp' ? -1 : 1) * .04 * step, -.4, .4);
+      this.hover = null; this.drag = null; this.updateReadouts(); this.needsDraw = true;
+    });
+    canvas.addEventListener('pointerdown', e => { if (e.pointerType === 'touch' || e.button !== 0) return; canvas.focus({preventScroll:true}); canvas.setPointerCapture(e.pointerId); this.drag = { canvas, id: e.pointerId, x: e.clientX, y: e.clientY }; });
     canvas.addEventListener('pointermove', e => {
       if (this.drag?.canvas === canvas && this.drag.id === e.pointerId) {
         this.yaw = clamp(this.yaw + (e.clientX - this.drag.x) * .006, -.8, .8); this.pitch = clamp(this.pitch + (e.clientY - this.drag.y) * .004, -.4, .4);
@@ -531,7 +550,7 @@ export class ModelNetwork {
       else this.updateReadouts();
     });
     const release = () => { this.drag = null; };
-    canvas.addEventListener('pointerup', release); canvas.addEventListener('pointercancel', release);
+    canvas.addEventListener('pointerup', release); canvas.addEventListener('pointercancel', release); canvas.addEventListener('lostpointercapture', release);
     canvas.addEventListener('pointerleave', () => { this.hover = null; this.updateReadouts(); this.needsDraw = true; });
   }
 

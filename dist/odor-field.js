@@ -16,7 +16,7 @@ export class OdorFieldLayer {
         mask.addColorStop(1-fade,'#fff');mask.addColorStop(1,'transparent');
         ctx.fillStyle=mask;ctx.fillRect(0,0,width,height);
       }
-    })();
+    })().catch(error=>{this.promise=null;this.image=null;throw error;});
     return this.promise;
   }
   draw(ctx,{width,height,unproject,source,time=0}) {

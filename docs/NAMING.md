@@ -1,4 +1,6 @@
-# SenseFlight naming
+# ConnectomeFlight website and SenseFlight research naming
+
+Website brand: **ConnectomeFlight**. This display name does not rename research packages, repositories, stored model keys or URLs.
 
 Research: SenseFlight. Display project: SenseFlight-Web. Pure visual: SenseFlight-Vis (V). Multimodal: SenseFlight-VisOlf (VO).
 

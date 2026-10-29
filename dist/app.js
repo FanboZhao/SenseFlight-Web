@@ -1,5 +1,5 @@
-import { ModelNetwork } from './model-network.js?v=network-polish-20261029';
-import { OdorFieldLayer } from './odor-field.js?v=vo2454-20261029';
+import { ModelNetwork } from './model-network.js?v=connectomeflight-20261029';
+import { OdorFieldLayer } from './odor-field.js?v=connectomeflight-20261029';
 const byId = id => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TASKS = {
@@ -84,7 +84,9 @@ function setEnabled(enabled) {
 }
 function showError() {
   state.ready = false; video.pause(); setEnabled(false); modelNetwork.clearScene();
-  byId('loading').textContent = '展示画面加载失败，请重新选择任务重试。';
+  byId('loading-message').textContent = '回放暂时未能加载，请重试。';
+  byId('retry-load').hidden = false;
+  byId('loading').classList.add('load-failed');
   byId('loading').classList.remove('hidden');
 }
 function scheduleFrames(generation) {
@@ -95,7 +97,11 @@ function scheduleFrames(generation) {
       render(Math.round(metadata.mediaTime*20)); scheduleFrames(generation);
     });
   } else {
-    videoCallback = requestAnimationFrame(() => { render(); scheduleFrames(generation); });
+    videoCallback = requestAnimationFrame(() => {
+      const frame = Math.floor(video.currentTime * 20 + .001);
+      if (!video.paused && frame !== state.frame) render(frame);
+      scheduleFrames(generation);
+    });
   }
 }
 async function loadScene(key) {
@@ -110,7 +116,8 @@ async function loadScene(key) {
   videoListenerController?.abort(); videoListenerController=new AbortController();
   const options={signal:videoListenerController.signal};
   setEnabled(false);
-  byId('loading').textContent='正在加载同步展示…';byId('loading').classList.remove('hidden');
+  byId('loading-message').textContent='正在准备同步回放…';
+  byId('retry-load').hidden=true;byId('loading').classList.remove('hidden','load-failed');
   document.body.classList.toggle('multimodal',key==='D4');byId('odor-card').hidden=key!=='D4';
   document.querySelector('.model-tag').textContent=task().model;
   byId('task-model-note').textContent=key==='D4'
@@ -121,7 +128,7 @@ async function loadScene(key) {
   document.querySelector('.eye-card .card-tag').textContent=key==='D4'?'64 × 64':'32 × 32';
   byId('camera-resolution-badge').textContent=' · HD';byId('task-summary').textContent=task().summary;byId('scene-id').textContent='';
   byId('network-dialog-title').textContent=`${task().model} · ${key==='D4'?'视嗅融合到动作':'从视觉到动作'}`;
-  document.querySelector('.footer span').textContent=`${key==='D4'?'SenseFlight-VisOlf':'SenseFlight-Vis'} · ConnectomeFlight → FlyBody`;
+  document.querySelector('.footer span').textContent = 'ConnectomeFlight · 基于 FlyVis × FlyBody';
   document.querySelectorAll('[data-difficulty]').forEach(button=>{const active=button.dataset.difficulty===key;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
   const url=new URL(location.href);url.searchParams.set('task',key);history.replaceState(null,'',url);
   try {
@@ -129,7 +136,7 @@ async function loadScene(key) {
       video.addEventListener('loadeddata',resolve,{...options,once:true});
       video.addEventListener('error',()=>reject(new Error('视频加载失败')),{...options,once:true});
     });
-    video.src=task().media;video.load();
+    video.src=task().media;video.load();video.playbackRate=Number(byId('speed').value);
     const [scene]=await Promise.all([
       fetch(`./media/${key.toLowerCase()}-display.json?v=vo2454-20261029`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
       mediaReady,key==='D4'?odorField.load():Promise.resolve(),
@@ -160,6 +167,7 @@ video.addEventListener('seeked',()=>render());
 video.addEventListener('pause',updateControls);
 video.addEventListener('ended',()=>{render(task().frames-1);updateControls();});
 byId('play-button').addEventListener('click',togglePlay);
+byId('retry-load').addEventListener('click',()=>loadScene(state.task));
 byId('step-back').addEventListener('click',()=>seek((state.pendingFrame ?? state.frame)-1));
 byId('step-forward').addEventListener('click',()=>seek((state.pendingFrame ?? state.frame)+1));
 document.querySelectorAll('#timeline, [data-playback-timeline]').forEach(el=>el.addEventListener('input',()=>seek(Number(el.value))));
@@ -336,7 +344,7 @@ function bindPanelDivider() {
   const workspace = document.querySelector('.workspace');
   const flight = byId('flight-panel');
   const divider = byId('panel-divider');
-  const desktop = window.matchMedia('(min-width:760px) and (min-height:560px)');
+  const desktop = window.matchMedia('(min-width:1100px) and (min-height:720px)');
   let preferredRatio = null;
   let drag = null;
 
@@ -345,7 +353,7 @@ function bindPanelDivider() {
     const available = workspace.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - parseFloat(style.rowGap);
     const min = Math.min(160, available * .48);
     // Both panels retain useful minimum heights; the camera never gains stretched space.
-    const max = Math.max(min, Math.min((flight.clientWidth - 12) * 9 / 32 + 68, available - Math.min(280, available - min)));
+    const max = Math.max(min, Math.min((flight.clientWidth - 12) * 9 / 32 + 80, available - Math.min(280, available - min)));
     return { available, min, max };
   };
   const sync = () => {

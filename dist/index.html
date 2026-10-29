@@ -4,21 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b1016">
-  <meta name="description" content="SenseFlight 纯视觉与多模态任务观测台：双眼输入、高清飞行画面、轨迹与真实模型活动同屏同步显示。">
+  <meta name="description" content="ConnectomeFlight 视觉与嗅觉飞行观测台：双眼输入、高清飞行画面、轨迹与真实模型活动同屏同步显示。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <title>SenseFlight · 感官飞行观测台</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=network-polish-20261029">
-  <link rel="stylesheet" href="./model-network.css?v=network-polish-20261029">
-  <link rel="stylesheet" href="./visual-polish.css?v=network-polish-20261029">
-  <link rel="stylesheet" href="./demo.css?v=network-polish-20261029">
-  <script type="module" src="./app.js?v=network-polish-20261029"></script>
+  <title>ConnectomeFlight · 感知与飞行观测台</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=connectomeflight-20261029">
+  <link rel="stylesheet" href="./style.css?v=connectomeflight-20261029">
+  <link rel="stylesheet" href="./model-network.css?v=connectomeflight-20261029">
+  <link rel="stylesheet" href="./visual-polish.css?v=connectomeflight-20261029">
+  <link rel="stylesheet" href="./demo.css?v=connectomeflight-20261029">
+  <script type="module" src="./app.js?v=connectomeflight-20261029"></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="./" aria-label="SenseFlight 观测台首页"><span class="brand-mark" aria-hidden="true"><img src="./favicon.svg" alt=""></span><strong>SenseFlight</strong><span class="brand-subtitle">感官飞行观测台</span></a>
-    <div class="top-status"><span class="live-dot"></span><span>冻结回放</span><span class="model-tag">ConnectomeFlight-V · T4/T5 · 115 参数</span></div>
+    <a class="brand" href="./" aria-label="ConnectomeFlight 观测台首页"><span class="brand-mark" aria-hidden="true"><img src="./favicon.svg?v=connectomeflight-20261029" alt=""></span><strong>ConnectomeFlight</strong><span class="brand-subtitle">感知 · 神经活动 · 飞行</span></a>
+    <div class="difficulty-list task-switcher" role="group" aria-label="选择实验任务">
+          <button class="difficulty active" type="button" data-difficulty="D3" aria-pressed="true" title="纯视觉任务：可见球形目标随机树林；T4/T5 读出，115 参数"><strong>纯视觉任务</strong></button>
+          <button class="difficulty" type="button" data-difficulty="D4" aria-pressed="false" title="多模态任务：视觉与嗅觉，四目标气味源导航"><strong>多模态任务</strong></button>
+        </div>
+    <div class="top-status"><span class="live-dot"></span><span>同步回放</span><span class="model-tag">ConnectomeFlight-V · T4/T5 · 115 参数</span></div>
     <button id="info-open" class="quiet-button" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 7v4M8 4.5v.2"></path></svg>来源与说明</button>
   </header>
 
@@ -62,7 +66,7 @@
         <div class="camera-overlay camera-overlay-top"><span class="badge">TOPDOWN · 固定俯视</span><button id="topdown-expand" data-camera-view="topdown" class="camera-zoom-button" type="button" aria-label="放大固定俯视摄像头画面" title="放大固定俯视摄像头画面" disabled><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4"></path></svg></button></div>
         <div class="camera-overlay camera-overlay-bottom"><span id="topdown-time">T + 0.000 S</span><span>X → · Y ↑</span></div>
       </div>
-      <div id="loading" class="loading" role="status">正在加载回放展示…</div>
+      <div id="loading" class="loading" role="status"><span class="loading-orbit" aria-hidden="true"></span><p id="loading-message">正在准备同步回放…</p><button id="retry-load" type="button" hidden>重新加载</button></div>
       </div>
       <div class="transport" aria-label="所有视图共享的回放控制">
         <button id="play-button" class="play-button" type="button" aria-label="播放" title="播放 / 暂停（空格）" disabled>▶</button>
@@ -76,10 +80,7 @@
     <aside class="right-column" aria-label="任务轨迹与动作输出">
       <section class="trajectory-card" aria-labelledby="trajectory-title">
         <div class="right-head"><h2 id="trajectory-title"><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="12" r="1.5"></circle><path d="M4.5 12h3a3 3 0 0 0 0-6H6a2 2 0 0 1 0-4h6m-2-1 2 1-2 2"></path></svg>飞行轨迹</h2><span id="trajectory-view">俯视 · X↑</span></div>
-        <div class="difficulty-list" role="group" aria-label="选择实验任务">
-          <button class="difficulty active" type="button" data-difficulty="D3" aria-pressed="true" title="纯视觉任务：可见球形目标随机树林；T4/T5 读出，115 参数"><strong>纯视觉任务</strong></button>
-          <button class="difficulty" type="button" data-difficulty="D4" aria-pressed="false" title="多模态任务：视觉与嗅觉，四目标气味源导航"><strong>多模态任务</strong></button>
-        </div>
+
         <p id="task-summary" class="task-summary" role="status">正在加载纯视觉任务…</p>
         <div class="trajectory-map"><canvas id="trajectory" role="img" aria-label="俯视轨迹：实线为已飞路径，虚线为未播放路径，箭头为当前果蝇，圆形为障碍"></canvas></div>
         <div class="map-legend"><span><i class="legend-line"></i>已飞</span><span><i class="legend-pending"></i>未播放</span><span><i class="legend-fly"></i>果蝇</span><span><i class="legend-start"></i>起点</span><span><i class="legend-obstacle"></i>障碍</span><span><i class="legend-target"></i>目标</span></div>
@@ -94,33 +95,31 @@
 
     <section id="model-network" class="model-network-card" aria-labelledby="network-title">
       <div class="network-heading"><h2 id="network-title"><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 8 3-4m-3 4 3 4m2-8 3 3m-3 5 3-3"></path><circle cx="2.5" cy="8" r="1.5"></circle><circle cx="8" cy="2.5" r="1.5"></circle><circle cx="8" cy="13.5" r="1.5"></circle><circle cx="13.5" cy="8" r="1.5"></circle></svg>模型活动</h2><span class="network-flow-note">视觉<span class="flow-odor"> × 嗅觉</span> → 动作</span><div class="network-heading-actions"><button id="cell-types-open" class="quiet-button" type="button" aria-haspopup="dialog">细胞类型</button><button id="network-expand" type="button" disabled><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4"></path></svg>放大</button></div></div>
-      <div class="network-canvas-shell"><canvas id="network-canvas" title="悬停查看类型，拖动调整视觉网络视角" aria-label="同帧模型活动展示；悬停查看类型，拖动调整视角"></canvas><div id="network-load" class="network-load" role="status">正在加载真实模型活动…</div><p id="network-inspector" class="network-inspector">悬停查看类型 · 拖动调整视角</p></div>
+      <div class="network-canvas-shell"><canvas id="network-canvas" tabindex="0" title="悬停查看类型 · 拖动或方向键旋转 · Home 恢复视角" aria-label="同帧模型活动；悬停查看类型，拖动或方向键旋转，Home 恢复视角"></canvas><div id="network-load" class="network-load" role="status">正在加载真实模型活动…</div><p id="network-inspector" class="network-inspector">悬停查看类型 · 拖动调整视角</p></div>
       <div class="network-legend"><span class="network-color-scale"><i></i>负 ← 0 → 正</span><span class="network-help">悬停查看 · 拖动旋转</span><span id="network-sync">等待播放</span></div>
     </section>
   </main>
-  <footer class="footer"><span>SenseFlight-Vis · ConnectomeFlight → FlyBody</span><span>选定成功案例 · 连续活动展示 · 同帧同步</span></footer>
+  <footer class="footer"><span>ConnectomeFlight · 基于 FlyVis × FlyBody</span><span>选定成功案例 · 连续活动展示 · 同帧同步</span></footer>
 
   <dialog id="info-dialog" class="info-dialog" aria-labelledby="info-title">
     <div class="dialog-head"><h2 id="info-title">来源与显示说明</h2><button id="info-close" type="button" aria-label="关闭来源与说明">×</button></div>
     <div class="info-content">
-      <p>双眼、六边形采样、T4/T5、嗅觉、双镜头、轨迹与模型图使用同一回放帧。俯视镜头以细线小圆环标出果蝇位置，标记随播放、暂停和跳帧同步更新。支持播放、逐帧、倍速、时间轴、镜头放大、模型图拖动旋转与细胞类型筛选。</p>
-      <p>模型图和感官图采用量化后的显示颜色，保留连续模型响应的可视变化；不提供精确活动值、模型参数或训练材料。悬停可查看节点类型，不能读取训练参数。</p>
-      <p id="task-model-note">纯视觉任务使用 115 参数的 ConnectomeFlight-V（T4/T5，update800）。双眼 144 维特征经固定归一化与 104 维压缩，再经两个标量读出层、50 ms EMA 记忆和动作头，在疏朗树林 v3 中绕行抵达直径 1.8 cm 的球形目标。</p>
-      <p>画面来自选定成功案例，不代表整体性能或独立泛化测试。亮点不是生物脉冲记录；图形布局不表示完整脑解剖或因果归因。气味场底色用于展示，轻微动画不改变回放读数。</p>
-      <p id="network-population">正在读取展示布局…</p>
-      <details id="cell-type-details" class="network-details"><summary>视觉细胞类型</summary><p id="network-sampling"></p><div id="network-cell-types" class="network-cell-types" role="group" aria-label="选择 FlyVis 细胞类型"></div><p id="network-validation"></p></details>
-      <p>感谢上游 <strong>FlyVis</strong> 视觉模型与 <strong>FlyBody</strong> 果蝇身体模型。界面交互参考 <a href="https://github.com/Lulzx/fly-brain" target="_blank" rel="noopener noreferrer">fly-brain</a> 和 <a href="https://huggingface.co/spaces/Xenova/fruit-fly-simulation" target="_blank" rel="noopener noreferrer">Neural Canvas</a>。</p>
+      <section class="info-section"><h3>从感知到飞行</h3><p>ConnectomeFlight 将感官输入、模型活动和飞行结果放在同一时间轴上。切换纯视觉与多模态任务，对照观察双眼、触角、两路镜头、轨迹与动作。</p></section>
+      <section class="info-section"><h3>当前演示</h3><p id="task-model-note">纯视觉任务使用 115 参数的 ConnectomeFlight-V（T4/T5，update800）。双眼特征经固定压缩、标量读出和 50 ms EMA 记忆产生飞行动作，在树林中绕行抵达球形目标。</p><p>画面来自选定成功案例，不代表整体性能或独立泛化测试。</p></section>
+      <section class="info-section"><h3>怎样阅读活动图</h3><p>蓝色表示负值，绿色至黄色表示正值。亮点展示量化后的连续模型响应，不是生物脉冲记录；布局用于说明网络结构，不表示完整脑解剖或因果归因。俯视画面中的细线圆环标出果蝇位置。</p><p id="network-population">正在读取展示布局…</p><details id="cell-type-details" class="network-details"><summary>筛选视觉细胞类型</summary><p id="network-sampling"></p><div id="network-cell-types" class="network-cell-types" role="group" aria-label="选择 FlyVis 细胞类型"></div><p id="network-validation"></p></details></section>
+      <section class="info-section"><h3>操作提示</h3><div class="shortcut-list"><span><kbd>空格</kbd> 播放 / 暂停</span><span><kbd>←</kbd><kbd>→</kbd> 逐帧查看</span><span>模型图获得焦点后，方向键旋转，<kbd>Home</kbd> 恢复视角</span></div><p>拖动时间轴可定位回放，点击放大查看镜头或模型细节。所有视图同帧更新；气味场底色用于辅助观察。</p></section>
+      <section class="info-section"><h3>来源与致谢</h3><p>基于上游 <strong>FlyVis</strong> 视觉模型与 <strong>FlyBody</strong> 果蝇身体模型。界面交互参考 <a href="https://github.com/Lulzx/fly-brain" target="_blank" rel="noopener noreferrer">fly-brain</a> 和 <a href="https://huggingface.co/spaces/Xenova/fruit-fly-simulation" target="_blank" rel="noopener noreferrer">Neural Canvas</a>。</p></section>
     </div>
   </dialog>
   <dialog id="camera-dialog" class="camera-dialog" aria-labelledby="camera-dialog-title">
     <div class="dialog-head"><h2 id="camera-dialog-title">高清飞行画面</h2><button id="camera-close" type="button" aria-label="关闭放大画面">×</button></div>
     <canvas id="camera-image-large" width="1280" height="720" aria-label="同步飞行画面"></canvas>
     <div class="dialog-transport" aria-label="放大飞行画面的回放控制"><button class="network-play" data-playback-toggle type="button" disabled>▶ 播放</button><span data-playback-time>0.00 / 0.00 s</span><input type="range" data-playback-timeline min="0" max="205" value="0" aria-label="放大飞行画面时间轴" disabled></div>
-    <div class="camera-dialog-foot"><span id="camera-dialog-resolution">—</span><a id="camera-original" href="#" download="SenseFlight-frame.png">保存当前画面 ↗</a></div>
+    <div class="camera-dialog-foot"><span id="camera-dialog-resolution">—</span><a id="camera-original" href="#" download="ConnectomeFlight-frame.png">保存当前画面 ↗</a></div>
   </dialog>
   <dialog id="network-dialog" class="network-dialog" aria-labelledby="network-dialog-title">
     <div class="dialog-head"><div><h2 id="network-dialog-title">ConnectomeFlight-V · T4/T5 · 115 参数 · 从视觉到动作</h2><p>连续模型活动 · 蓝为负值，绿至黄为正值</p></div><button id="network-close" type="button" aria-label="关闭模型活动放大视图">×</button></div>
-    <div class="network-dialog-scroll"><canvas id="network-canvas-large" aria-label="放大的真实模型神经活动；拖动调整视角"></canvas></div>
+    <div class="network-dialog-scroll"><canvas id="network-canvas-large" tabindex="0" aria-label="放大的模型活动；拖动或方向键旋转，Home 恢复视角"></canvas></div>
     <p id="network-dialog-inspector" class="network-inspector">悬停查看类型 · 拖动调整视角</p>
     <div class="network-dialog-foot"><span id="network-dialog-status">等待播放</span><button class="network-play" data-playback-toggle type="button" disabled>▶ 播放</button><input type="range" data-playback-timeline min="0" max="205" value="0" aria-label="放大模型活动时间轴" disabled></div>
   </dialog>

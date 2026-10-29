@@ -1,8 +1,8 @@
-# SenseFlight
+# ConnectomeFlight
 
 在线展示：[zhaofanbo.com/SenseFlight-Web](https://zhaofanbo.com/SenseFlight-Web/)
 
-纯视觉与多模态飞行展示，支持双镜头同步回放、模型图旋转、细胞筛选与画面放大。
+纯视觉与多模态飞行展示，支持顶部任务切换、双镜头同步回放、模型图拖动与键盘旋转、细胞筛选与画面放大。桌面、平板与手机采用适配布局。
 
 仓库仅包含网页、画面、显示颜色贴图及经过取舍的回放信息；不提供 checkpoint、模型权重、偏置、完整中间层数值或训练代码。
 
