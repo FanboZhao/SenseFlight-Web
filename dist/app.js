@@ -1,20 +1,35 @@
-import { ModelNetwork } from './model-network.js?v=connectomeflight-20261029';
-import { OdorFieldLayer } from './odor-field.js?v=connectomeflight-20261029';
+import { ModelNetwork } from './model-network.js?v=three-scenes-20261029';
+import { OdorFieldLayer } from './odor-field.js?v=three-scenes-20261029';
 const byId = id => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TASKS = {
-  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-V · T4/T5 · 115 参数', frames: 197, media: './media/d3.mp4?v=vo2454-20261029', summary: '树林 v3 · 绕行抵达球形目标' },
-  D4: { name: '多模态任务', model: 'ConnectomeFlight-VO · Vis115 · 2454 参数', frames: 404, media: './media/d4.mp4?v=vo2454-20261029', summary: 'Vis115 + 嗅觉残差 · 选定成功案例' },
+  D3: { name: '纯视觉任务', model: 'ConnectomeFlight-V · T4/T5 · 115 参数', summary: '树林 v3 · 绕行抵达球形目标', scenes: [
+    {detail:'上侧目标', summary:'上侧球形目标 · 5 处树障碍'},
+    {detail:'中部目标', summary:'中部球形目标 · 4 处树障碍'},
+    {detail:'下侧目标', summary:'下侧球形目标 · 5 处树障碍'},
+  ] },
+  D4: { name: '多模态任务', model: 'ConnectomeFlight-VO · Vis115 · 2454 参数', summary: 'Vis115 + 嗅觉残差 · 选定成功案例', scenes: [
+    {detail:'下侧气味源', summary:'下侧气味源 · 相同外观的 4 个目标'},
+    {detail:'上侧气味源', summary:'上侧气味源 · 镜像树障碍布局'},
+    {detail:'中部气味源', summary:'中部气味源 · 不同树障碍布局'},
+  ] },
 };
+const ASSET_VERSION = 'three-scenes-20261029';
 const CROPS = {follow:[0,0,1280,720],topdown:[1280,0,1280,720]};
 const modelNetwork = new ModelNetwork();
 const odorField = new OdorFieldLayer();
 const TRACE_COLOR = '#a9dfc7';
 const video = byId('replay-source');
-const state = { task: 'D3', scene: null, frame: 0, cell: 0, ready: false, pendingFrame: null, generation: 0, expanded: 'follow' };
+const state = { task: 'D3', variant: 1, selectedVariants: {D3:1,D4:1}, scene: null, frame: 0, cell: 0, ready: false, pendingFrame: null, generation: 0, expanded: 'follow' };
 let videoCallback = null;
 let videoListenerController = null;
 const task = () => TASKS[state.task];
+const frames = () => state.scene?.frames ?? 0;
+const lastFrame = () => Math.max(0, frames()-1);
+const variantInfo = () => task().scenes[state.variant-1];
+const sceneTitle = () => `场景 ${String(state.variant).padStart(2,'0')}`;
+const mediaStem = () => `${state.task.toLowerCase()}${state.variant===1?'':`-${state.variant}`}`;
+const assetURL = suffix => `./media/${mediaStem()}${suffix}?v=${ASSET_VERSION}`;
 
 function paint(id, crop, smooth = true) {
   const canvas = byId(id);
@@ -40,7 +55,7 @@ function drawTopdownMarker(canvas, ctx) {
 }
 function render(frame = Math.floor(video.currentTime * 20 + .001)) {
   if (!state.ready || video.readyState < 2 || video.seeking) return;
-  state.frame = clamp(frame, 0, task().frames - 1);
+  state.frame = clamp(frame, 0, lastFrame());
   state.pendingFrame = null;
   paint('camera-image', CROPS.follow); paint('topdown-image', CROPS.topdown);
   modelNetwork.setFrame(state.frame);
@@ -68,14 +83,14 @@ function updateControls() {
   document.querySelectorAll('[data-playback-toggle]').forEach(button => {
     button.textContent = playing ? 'Ⅱ 暂停' : '▶ 播放'; button.setAttribute('aria-label', playing ? '暂停' : '播放');
   });
-  const elapsed = (state.frame*.005).toFixed(3), duration = ((task().frames-1)*.005).toFixed(3);
-  byId('frame-label').textContent = `${String(state.frame+1).padStart(4,'0')} / ${String(task().frames).padStart(4,'0')}`;
+  const elapsed = (state.frame*.005).toFixed(3), duration = ((lastFrame())*.005).toFixed(3);
+  byId('frame-label').textContent = frames() ? `${String(state.frame+1).padStart(4,'0')} / ${String(frames()).padStart(4,'0')}` : '— / —';
   byId('sim-time').textContent = byId('topdown-time').textContent = `T + ${elapsed} S`;
   document.querySelectorAll('[data-playback-time]').forEach(el => { el.textContent = `${elapsed} / ${duration} s`; });
   document.querySelectorAll('#timeline, [data-playback-timeline]').forEach(el => {
-    el.max = String(task().frames-1); el.value = String(state.pendingFrame ?? state.frame);
-    el.style.setProperty('--progress', `${state.frame/(task().frames-1)*100}%`);
-    el.setAttribute('aria-valuetext', `第 ${state.frame+1} 帧，共 ${task().frames} 帧`);
+    el.max = String(lastFrame()); el.value = String(state.pendingFrame ?? state.frame);
+    el.style.setProperty('--progress', `${state.frame/Math.max(1,lastFrame())*100}%`);
+    el.setAttribute('aria-valuetext', frames()?`第 ${state.frame+1} 帧，共 ${frames()} 帧`:'等待回放加载');
   });
   modelNetwork.setPlaybackActive(playing);
 }
@@ -84,6 +99,7 @@ function setEnabled(enabled) {
 }
 function showError() {
   state.ready = false; video.pause(); setEnabled(false); modelNetwork.clearScene();
+  byId('flight-panel').setAttribute('aria-busy','false');
   byId('loading-message').textContent = '回放暂时未能加载，请重试。';
   byId('retry-load').hidden = false;
   byId('loading').classList.add('load-failed');
@@ -104,55 +120,85 @@ function scheduleFrames(generation) {
     });
   }
 }
-async function loadScene(key) {
+function clearReadouts() {
+  for(const id of ['eye-left','eye-right','hex-left','hex-right','t4-left','t4-right','trajectory']) {
+    const canvas=byId(id),ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  for(const id of ['position-xy','distance','camera-position','odor-0','odor-1','odor-features'])byId(id).textContent='—';
+  for(const id of ['odor-meter-0','odor-meter-1'])byId(id).value=0;
+}
+function waitForVideo(signal, source) {
+  return new Promise((resolve,reject)=>{
+    const clean=()=>{video.removeEventListener('loadeddata',loaded);video.removeEventListener('error',failed);signal.removeEventListener('abort',aborted);};
+    const loaded=()=>{if(video.currentSrc!==new URL(source,location.href).href)return;clean();resolve();};
+    const failed=()=>{clean();reject(new Error('视频加载失败'));};
+    const aborted=()=>{clean();reject(new DOMException('回放已切换','AbortError'));};
+    video.addEventListener('loadeddata',loaded);video.addEventListener('error',failed);signal.addEventListener('abort',aborted,{once:true});
+    if(signal.aborted)aborted();
+  });
+}
+function validateScene(scene,key) {
+  if(scene.format!=='presentation-v2'||scene.difficulty!==key||!Number.isInteger(scene.frames)||scene.frames<1)throw new Error('展示记录不匹配');
+  for(const name of ['positionsXYZCm','actions','distanceCm','topdownMarkerXY'])if(!Array.isArray(scene[name])||scene[name].length!==scene.frames)throw new Error('展示帧数不匹配');
+  if(key==='D4')for(const name of ['odorConcentrations','odorFeatures'])if(!Array.isArray(scene[name])||scene[name].length!==scene.frames)throw new Error('嗅觉帧数不匹配');
+  if(!Number.isFinite(video.duration)||Math.abs(video.duration-scene.frames/20)>.11)throw new Error('视频与展示帧数不匹配');
+}
+async function loadScene(key, variant) {
   if (!Object.hasOwn(TASKS,key)) key='D3';
+  variant=Number(variant??state.selectedVariants[key]);
+  if(!Number.isInteger(variant)||variant<1||variant>TASKS[key].scenes.length)variant=1;
   const generation=++state.generation;
-  video.pause(); state.ready=false; state.task=key; state.scene=null; state.frame=0; state.pendingFrame=null;
-  modelNetwork.clearScene();
+  video.pause(); state.ready=false; state.task=key; state.variant=variant; state.selectedVariants[key]=variant; state.scene=null; state.frame=0; state.pendingFrame=null;
+  modelNetwork.clearScene();clearReadouts();
+  byId('flight-panel').setAttribute('aria-busy','true');
   if(videoCallback!==null) {
     if(video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(videoCallback);
     else cancelAnimationFrame(videoCallback);
   }
   videoListenerController?.abort(); videoListenerController=new AbortController();
   const options={signal:videoListenerController.signal};
-  setEnabled(false);
-  byId('loading-message').textContent='正在准备同步回放…';
+  setEnabled(false);updateControls();
+  byId('loading-message').textContent=`正在准备${task().name} · ${sceneTitle()}…`;
   byId('retry-load').hidden=true;byId('loading').classList.remove('hidden','load-failed');
   document.body.classList.toggle('multimodal',key==='D4');byId('odor-card').hidden=key!=='D4';
   document.querySelector('.model-tag').textContent=task().model;
   byId('task-model-note').textContent=key==='D4'
-    ? '多模态任务使用当前选定的 ConnectomeFlight-VO：2454 参数、update28800。完整 Vis115 分支经固定压缩和 50 ms EMA 产生视觉基准；触角气味经 32 维 RNN，与视觉记忆融合形成残差。两路相加后经 tanh 控制飞行。这里展示一个成功案例。'
+    ? '多模态任务使用当前选定的 ConnectomeFlight-VO：2454 参数、update28800。完整 Vis115 分支经固定压缩和 50 ms EMA 产生视觉基准；触角气味经 32 维 RNN，与视觉记忆融合形成残差。两路相加后经 tanh 控制飞行。这里提供三个不同场景的成功案例，可对照气味源和障碍布局变化。'
     : '纯视觉任务使用 115 参数的 ConnectomeFlight-V（T4/T5，update800）。双眼 144 维特征经固定归一化与 104 维压缩，再经两个标量读出层、50 ms EMA 记忆和动作头，在疏朗树林 v3 中绕行抵达直径 1.8 cm 的球形目标。';
   document.querySelector('.column-heading h1').lastChild.textContent=key==='D4'?'视嗅输入':'视觉输入';
   document.querySelector('.column-heading > span').textContent=key==='D4'?'双眼 + 触角':'左眼 / 右眼';
   document.querySelector('.eye-card .card-tag').textContent=key==='D4'?'64 × 64':'32 × 32';
-  byId('camera-resolution-badge').textContent=' · HD';byId('task-summary').textContent=task().summary;byId('scene-id').textContent='';
-  byId('network-dialog-title').textContent=`${task().model} · ${key==='D4'?'视嗅融合到动作':'从视觉到动作'}`;
+  byId('camera-resolution-badge').textContent=' · HD';byId('task-summary').textContent=`${sceneTitle()} · ${variantInfo().summary}`;byId('scene-id').textContent='';
+  byId('network-dialog-title').textContent=`${task().model} · ${sceneTitle()} · ${key==='D4'?'视嗅融合到动作':'从视觉到动作'}`;
   document.querySelector('.footer span').textContent = 'ConnectomeFlight · 基于 FlyVis × FlyBody';
   document.querySelectorAll('[data-difficulty]').forEach(button=>{const active=button.dataset.difficulty===key;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
-  const url=new URL(location.href);url.searchParams.set('task',key);history.replaceState(null,'',url);
+  document.querySelectorAll('[data-scene]').forEach(button=>{
+    const index=Number(button.dataset.scene),active=index===variant,info=task().scenes[index-1];
+    button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
+    button.querySelector('.scene-detail').textContent=info.detail;
+    button.setAttribute('aria-label',`${task().name}，场景 ${index}，${info.summary}`);
+    button.title=info.summary;
+  });
+  const url=new URL(location.href);url.searchParams.set('task',key);url.searchParams.set('scene',String(variant));history.replaceState(null,'',url);
   try {
-    const mediaReady=new Promise((resolve,reject)=>{
-      video.addEventListener('loadeddata',resolve,{...options,once:true});
-      video.addEventListener('error',()=>reject(new Error('视频加载失败')),{...options,once:true});
-    });
-    video.src=task().media;video.load();video.playbackRate=Number(byId('speed').value);
+    const source=assetURL('.mp4'),mediaReady=waitForVideo(options.signal,source);
+    video.src=source;video.load();video.playbackRate=Number(byId('speed').value);
     const [scene]=await Promise.all([
-      fetch(`./media/${key.toLowerCase()}-display.json?v=vo2454-20261029`,{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
+      fetch(assetURL('-display.json'),{signal:options.signal}).then(r=>{if(!r.ok)throw new Error('展示信息加载失败');return r.json();}),
       mediaReady,key==='D4'?odorField.load():Promise.resolve(),
     ]);
     if(generation!==state.generation)return;
-    if(scene.format!=='presentation-v2'||scene.difficulty!==key||scene.frames!==task().frames)throw new Error('展示帧数不匹配');
+    validateScene(scene,key);
     state.scene=scene;
-    await modelNetwork.loadScene(scene,task().name);
+    await modelNetwork.loadScene(scene,`${task().name} · ${sceneTitle()}`,options.signal);
     if(generation!==state.generation)return;
-    state.ready=true;byId('loading').classList.add('hidden');setEnabled(true);render(0);scheduleFrames(generation);
+    state.ready=true;byId('flight-panel').setAttribute('aria-busy','false');byId('loading').classList.add('hidden');setEnabled(true);render(0);scheduleFrames(generation);
   }catch(error){if(generation===state.generation){console.error(error);showError();}}
 }
 
 function seek(frame) {
   if(!state.ready) return;
-  frame=clamp(Math.round(frame),0,task().frames-1);
+  frame=clamp(Math.round(frame),0,lastFrame());
   state.pendingFrame=frame; video.pause();
   video.currentTime=(frame+.1)/20;
   updateControls();
@@ -160,20 +206,28 @@ function seek(frame) {
 async function togglePlay() {
   if(!state.ready) return;
   if(!video.paused) {video.pause();updateControls();return;}
-  if(state.frame>=task().frames-1) video.currentTime=0;
+  if(state.frame>=lastFrame()) video.currentTime=0;
   try{await video.play();updateControls();}catch{byId('network-sync').textContent='请再次点击播放';}
 }
 video.addEventListener('seeked',()=>render());
 video.addEventListener('pause',updateControls);
-video.addEventListener('ended',()=>{render(task().frames-1);updateControls();});
+video.addEventListener('ended',()=>{render(lastFrame());updateControls();});
 byId('play-button').addEventListener('click',togglePlay);
-byId('retry-load').addEventListener('click',()=>loadScene(state.task));
+byId('retry-load').addEventListener('click',()=>loadScene(state.task,state.variant));
 byId('step-back').addEventListener('click',()=>seek((state.pendingFrame ?? state.frame)-1));
 byId('step-forward').addEventListener('click',()=>seek((state.pendingFrame ?? state.frame)+1));
 document.querySelectorAll('#timeline, [data-playback-timeline]').forEach(el=>el.addEventListener('input',()=>seek(Number(el.value))));
 document.querySelectorAll('[data-playback-toggle]').forEach(el=>el.addEventListener('click',togglePlay));
 byId('speed').addEventListener('change',event=>{video.playbackRate=Number(event.target.value);});
-document.querySelectorAll('[data-difficulty]').forEach(el=>el.addEventListener('click',()=>loadScene(el.dataset.difficulty)));
+document.querySelectorAll('[data-difficulty]').forEach(el=>el.addEventListener('click',()=>{if(state.task!==el.dataset.difficulty||!state.ready)loadScene(el.dataset.difficulty);}));
+document.querySelectorAll('[data-scene]').forEach(el=>el.addEventListener('click',()=>{if(state.variant!==Number(el.dataset.scene)||!state.ready)loadScene(state.task,el.dataset.scene);}));
+byId('scene-choices').addEventListener('keydown',event=>{
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+  event.preventDefault();event.stopPropagation();
+  const current=Number(document.activeElement?.dataset.scene)||state.variant;
+  const next=event.key==='Home'?1:event.key==='End'?3:((current-1+(event.key==='ArrowRight'?1:2))%3)+1;
+  const button=byId('scene-choices').querySelector(`[data-scene="${next}"]`);button.focus();button.click();
+});
 document.querySelectorAll('[data-cell]').forEach(button=>button.addEventListener('click',()=>{
   state.cell=Number(button.dataset.cell);
   document.querySelectorAll('[data-cell]').forEach(el=>{el.classList.toggle('selected',el===button);el.setAttribute('aria-pressed',String(el===button));});
@@ -182,7 +236,7 @@ document.querySelectorAll('[data-cell]').forEach(button=>button.addEventListener
 document.querySelectorAll('[data-camera-view]').forEach(button=>button.addEventListener('click',()=>{
   state.expanded=button.dataset.cameraView;
   byId('camera-dialog-title').textContent=state.expanded==='follow'?'高清跟随镜头':'TOPDOWN · 固定俯视镜头';
-  byId('camera-dialog-resolution').textContent=`1280 × 720 · ${task().name}`;
+  byId('camera-dialog-resolution').textContent=`1280 × 720 · ${task().name} · ${sceneTitle()}`;
   byId('camera-dialog').showModal();render();
 }));
 
@@ -353,7 +407,7 @@ function bindPanelDivider() {
     const available = workspace.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - parseFloat(style.rowGap);
     const min = Math.min(160, available * .48);
     // Both panels retain useful minimum heights; the camera never gains stretched space.
-    const max = Math.max(min, Math.min((flight.clientWidth - 12) * 9 / 32 + 80, available - Math.min(280, available - min)));
+    const max = Math.max(min, Math.min((flight.clientWidth - 12) * 9 / 32 + 100, available - Math.min(280, available - min)));
     return { available, min, max };
   };
   const sync = () => {
@@ -405,4 +459,6 @@ function bindPanelDivider() {
 }
 
 bindPanelDivider();
-loadScene(new URLSearchParams(location.search).get('task'));
+const initialQuery=new URLSearchParams(location.search);
+loadScene(initialQuery.get('task'),initialQuery.get('scene')||1);
+window.addEventListener('popstate',()=>{const query=new URLSearchParams(location.search);loadScene(query.get('task'),query.get('scene')||1);});

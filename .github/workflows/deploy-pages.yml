@@ -32,6 +32,9 @@ jobs:
               'dist/media/d3-display.json', 'dist/media/d4-display.json',
               'dist/media/d3-appearance.png', 'dist/media/d4-appearance.png',
           }
+          for task in ('d3','d4'):
+              for index in (2,3):
+                  expected.update(f'dist/media/{task}-{index}{suffix}' for suffix in ('.mp4','-display.json','-appearance.png'))
           tracked = set(subprocess.check_output(['git','ls-files','-z']).decode().strip('\0').split('\0'))
           actual = {str(p) for p in pathlib.Path('.').rglob('*') if p.is_file() and '.git' not in p.parts}
           assert tracked == expected, f'Unexpected tracked files: {tracked ^ expected}'
@@ -52,8 +55,16 @@ jobs:
           common = {'format','difficulty','frames','stepDtSeconds','hexUV','positionsXYZCm','distanceCm',
                     'actions','topdownMarkerXY','obstaclePositionsXYCm','obstacleRadiiCm','sourcePositionXYCm','sensorOffsets','networkLayout'}
           optional = {'goalPositionsXYCm','activeGoal','odorConcentrations','odorFeatures'}
-          for task, frames in [('d3',197),('d4',404)]:
-              scene = json.loads(pathlib.Path(f'dist/media/{task}-display.json').read_text())
+          scene_frames = {'d3':197,'d3-2':194,'d3-3':213,'d4':404,'d4-2':412,'d4-3':399}
+          geometries = {'d3':set(),'d4':set()}
+          layouts = {}
+          for name, frames in scene_frames.items():
+              task = name.split('-')[0]
+              scene = json.loads(pathlib.Path(f'dist/media/{name}-display.json').read_text())
+              assert scene['difficulty'] == task.upper() and scene['stepDtSeconds'] == .005
+              geometry = json.dumps([scene['obstaclePositionsXYCm'],scene['sourcePositionXYCm']],sort_keys=True)
+              assert geometry not in geometries[task], f'Duplicate scene geometry: {name}'
+              geometries[task].add(geometry)
               assert set(scene) == common | (optional if task == 'd4' else {'goalSphereRadiusCm'})
               assert scene['format'] == 'presentation-v2' and scene['frames'] == frames
               assert len(scene['positionsXYZCm']) == len(scene['actions']) == len(scene['distanceCm']) == frames
@@ -71,7 +82,8 @@ jobs:
                   assert scene['goalSphereRadiusCm'] == 0.9
                   assert [l['id'] for l in layout['layers']] == ['pooled','compressed','readout','latent','memory','control','actions']
               if task == 'd4':
-                  assert scene['activeGoal'] == 0 and len(scene['goalPositionsXYCm']) == 4
+                  assert isinstance(scene['activeGoal'],int) and 0 <= scene['activeGoal'] < 4 and len(scene['goalPositionsXYCm']) == 4
+                  assert scene['sourcePositionXYCm'] == scene['goalPositionsXYCm'][scene['activeGoal']]
                   assert len(scene['odorConcentrations']) == len(scene['odorFeatures']) == frames
                   assert [l['id'] for l in layout['layers']] == ['pooled','compressed','readout','latent','memory','control','baseLogits','odorInput','odorMemory','residualHidden','residualLogits','logits','actions']
                   assert [l['width'] for l in layout['layers']] == [144,104,1,1,1,1,3,2,32,32,3,3,3]
@@ -80,7 +92,11 @@ jobs:
               assert set(scene['sensorOffsets']) == {'hexVisual','hexActivity','eyes','eyeSize'}
               size=scene['sensorOffsets']['eyeSize']
               assert layout['imageHeight'] == layout['rowsPerFrame']*frames + ((frames*2 + layout['imageWidth']//size - 1)//(layout['imageWidth']//size))*size
-              png = pathlib.Path(f'dist/media/{task}-appearance.png').read_bytes()
+              assert layout['appearance'] == f'./media/{name}-appearance.png'
+              structure = {k:layout[k] for k in ('sampledNodesPerEye','fullNodesPerEye','cellTypes','layers','nodes','edges','imageWidth','rowsPerFrame')}
+              if task in layouts: assert structure == layouts[task], f'Model structure differs between scenes: {name}'
+              else: layouts[task] = structure
+              png = pathlib.Path(f'dist/media/{name}-appearance.png').read_bytes()
               width,height,depth,color = struct.unpack('>IIBB',png[16:26])
               assert (width,height,depth,color) == (layout['imageWidth'],layout['imageHeight'],8,6)
       - uses: actions/configure-pages@v5

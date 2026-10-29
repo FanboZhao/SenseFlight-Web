@@ -449,3 +449,29 @@ kbd { display:inline-flex; align-items:center; justify-content:center; min-width
 }
 @media (max-width:359px) { .brand strong { font-size:18px; } .brand-mark img { width:27px; height:27px; } #info-open { padding:0 7px; font-size:10px; } #info-open .ui-icon { display:none; } .network-heading-actions button { padding:6px 7px; } }
 @media (prefers-reduced-motion:reduce) { .loading-orbit { animation:none; border-right-color:#b9e5d0; } button, select { transition:none; } }
+
+/* Scene choice is shared by the complete synchronized display. */
+.flight-panel > .section-heading { display:grid; grid-template-columns:minmax(110px,1fr) minmax(275px,1.7fr) auto; gap:12px; }
+.flight-panel > .section-heading h2 { white-space:nowrap; }
+.scene-choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; min-width:0; }
+.scene-choice { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-width:0; min-height:38px; padding:5px 7px; background:#0c171f; border:1px solid #abc8cf15; border-radius:7px; text-align:center; line-height:1.1; }
+.scene-name { color:#aec2cd; font-size:11px; font-weight:550; font-variant-numeric:tabular-nums; }
+.scene-detail { color:#7f9cab; font-size:9px; white-space:nowrap; }
+.scene-choice.active { background:#1d3731; border-color:#a7d6be45; box-shadow:inset 0 1px #d1efdc08; }
+.scene-choice.active .scene-name { color:#d0eadd; }
+.scene-choice.active .scene-detail { color:#9dc7b4; }
+.scene-choice:hover:not(:disabled) { border-color:#9cbfab60; background:#20372f; }
+.scene-choice:focus-visible { outline-offset:2px; }
+.flight-panel { grid-template-rows:48px minmax(0,1fr) 44px; }
+.workspace { --flight-height:min(calc((var(--center-width) - 12px) * 9 / 32 + 100px),calc(var(--usable-height) - var(--workspace-gap) - var(--network-min))); }
+@media (max-width:1099px), (max-height:719px) { .flight-panel { grid-template-rows:48px auto 44px; } }
+@media (max-width:759px) {
+  .flight-panel > .section-heading { grid-template-columns:minmax(0,1fr) auto; grid-template-rows:26px 46px; gap:4px 10px; padding:0 6px; }
+  .flight-panel > .section-heading h2 { grid-column:1; grid-row:1; }
+  .flight-panel > .section-heading .section-meta { grid-column:2; grid-row:1; }
+  .scene-choices { grid-column:1/-1; grid-row:2; gap:6px; }
+  .scene-choice { min-height:44px; gap:4px; padding:6px 8px; border-radius:8px; }
+  .scene-name { font-size:12px; }
+  .scene-detail { font-size:10px; }
+  .flight-panel { grid-template-rows:80px auto 52px; }
+}

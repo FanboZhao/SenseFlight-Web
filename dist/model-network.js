@@ -125,11 +125,16 @@ export class ModelNetwork {
     this.needsDraw = true;
   }
 
-  async loadScene(scene, taskName) {
+  async loadScene(scene, taskName, signal) {
     const loadId = ++this.loadId;
     const layout = scene.networkLayout;
-    const image = new Image(); image.src = `${layout.appearance}?v=visolf2454-20261029`;
-    await image.decode();
+    const image = new Image();
+    const abort=()=>{image.src='';};
+    if(signal?.aborted)throw new DOMException('回放已切换','AbortError');
+    signal?.addEventListener('abort',abort,{once:true});
+    try { image.src=`${layout.appearance}?v=three-scenes-20261029`;await image.decode(); }
+    finally { signal?.removeEventListener('abort',abort); }
+    if(signal?.aborted)throw new DOMException('回放已切换','AbortError');
     if (loadId !== this.loadId) return;
     if (image.width !== layout.imageWidth || image.height !== layout.imageHeight) throw new Error('展示颜色贴图尺寸不匹配');
     const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;

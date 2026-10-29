@@ -8,16 +8,16 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <title>ConnectomeFlight · 感知与飞行观测台</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=connectomeflight-20261029">
-  <link rel="stylesheet" href="./style.css?v=connectomeflight-20261029">
-  <link rel="stylesheet" href="./model-network.css?v=connectomeflight-20261029">
-  <link rel="stylesheet" href="./visual-polish.css?v=connectomeflight-20261029">
-  <link rel="stylesheet" href="./demo.css?v=connectomeflight-20261029">
-  <script type="module" src="./app.js?v=connectomeflight-20261029"></script>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=three-scenes-20261029">
+  <link rel="stylesheet" href="./style.css?v=three-scenes-20261029">
+  <link rel="stylesheet" href="./model-network.css?v=three-scenes-20261029">
+  <link rel="stylesheet" href="./visual-polish.css?v=three-scenes-20261029">
+  <link rel="stylesheet" href="./demo.css?v=three-scenes-20261029">
+  <script type="module" src="./app.js?v=three-scenes-20261029"></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="./" aria-label="ConnectomeFlight 观测台首页"><span class="brand-mark" aria-hidden="true"><img src="./favicon.svg?v=connectomeflight-20261029" alt=""></span><strong>ConnectomeFlight</strong><span class="brand-subtitle">感知 · 神经活动 · 飞行</span></a>
+    <a class="brand" href="./" aria-label="ConnectomeFlight 观测台首页"><span class="brand-mark" aria-hidden="true"><img src="./favicon.svg?v=three-scenes-20261029" alt=""></span><strong>ConnectomeFlight</strong><span class="brand-subtitle">感知 · 神经活动 · 飞行</span></a>
     <div class="difficulty-list task-switcher" role="group" aria-label="选择实验任务">
           <button class="difficulty active" type="button" data-difficulty="D3" aria-pressed="true" title="纯视觉任务：可见球形目标随机树林；T4/T5 读出，115 参数"><strong>纯视觉任务</strong></button>
           <button class="difficulty" type="button" data-difficulty="D4" aria-pressed="false" title="多模态任务：视觉与嗅觉，四目标气味源导航"><strong>多模态任务</strong></button>
@@ -54,7 +54,11 @@
     </aside>
 
     <section id="flight-panel" class="flight-panel" aria-label="飞行画面与回放控制">
-      <div class="section-heading"><h2><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2"></rect><circle cx="8" cy="8" r="2.5"></circle></svg>飞行画面</h2><div class="section-meta"><span id="scene-id">读取场景…</span><strong id="frame-label">000 / 000</strong></div></div>
+      <div class="section-heading"><h2><svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2"></rect><circle cx="8" cy="8" r="2.5"></circle></svg>飞行画面</h2><div id="scene-choices" class="scene-choices" role="group" aria-label="选择展示场景">
+          <button type="button" data-scene="1" class="scene-choice active" aria-pressed="true"><span class="scene-name">场景 01</span><span class="scene-detail">上侧目标</span></button>
+          <button type="button" data-scene="2" class="scene-choice" aria-pressed="false"><span class="scene-name">场景 02</span><span class="scene-detail">中部目标</span></button>
+          <button type="button" data-scene="3" class="scene-choice" aria-pressed="false"><span class="scene-name">场景 03</span><span class="scene-detail">下侧目标</span></button>
+        </div><div class="section-meta"><span id="scene-id">读取场景…</span><strong id="frame-label">000 / 000</strong></div></div>
       <div class="camera-pair" aria-label="同步跟随与固定俯视摄像头">
       <div class="camera-card" aria-label="跟随 FlyBody 的 MuJoCo 摄像头">
         <canvas id="camera-image" width="1280" height="720" aria-label="同步飞行画面"></canvas>
